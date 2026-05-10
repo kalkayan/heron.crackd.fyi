@@ -6,6 +6,7 @@ import { AuthGuard } from "./components/AuthGuard";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { OnboardingPage } from "./pages/OnboardingPage";
 import { SessionPage } from "./pages/SessionPage";
 
 function App() {
@@ -19,6 +20,14 @@ function App() {
           element={
             <AuthGuard>
               <DashboardPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/start"
+          element={
+            <AuthGuard>
+              <OnboardingPage />
             </AuthGuard>
           }
         />

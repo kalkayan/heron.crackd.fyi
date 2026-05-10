@@ -8,19 +8,17 @@
 }
 
 html {
-  background: #f7f6f2;
+  background: #F4F1EA;
 }
 
 body {
   min-height: 100vh;
   min-width: 320px;
   margin: 0;
-  color: #24211d;
-  background-color: #f7f6f2;
-  background-image:
-    linear-gradient(rgba(36, 33, 29, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(36, 33, 29, 0.045) 1px, transparent 1px);
-  background-size: 24px 24px;
+  color: #1A1A1A;
+  background-color: #F4F1EA;
+  background-image: radial-gradient(circle, #D8D6CE 1px, transparent 1px);
+  background-size: 16px 16px;
 }
 
 a {

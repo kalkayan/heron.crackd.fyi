@@ -1,49 +1,337 @@
 import { Link } from "react-router-dom";
 
+const DOTS_BG = {
+  background: "#F4F1EA",
+  backgroundImage: "radial-gradient(circle, #D8D6CE 1px, transparent 1px)",
+  backgroundSize: "16px 16px",
+};
+
+function Logo({ size = 15 }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: size,
+        color: "#1A1A1A",
+        fontFamily: "inherit",
+        fontWeight: 600,
+        letterSpacing: "-0.02em",
+        textDecoration: "none",
+      }}
+    >
+      <span>
+        crackd<span style={{ color: "#D97757" }}>.fyi</span>
+      </span>
+    </span>
+  );
+}
+
+function Arrow({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path
+        d="M3 8H13M13 8L8.5 3.5M13 8L8.5 12.5"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DiffRow({ left, right }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 60px 1fr",
+        alignItems: "center",
+        gap: 20,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 400,
+          color: "#9A9A98",
+          letterSpacing: "-0.01em",
+          textDecoration: "line-through",
+          textDecorationColor: "rgba(154,154,152,0.4)",
+        }}
+      >
+        {left}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", color: "#D97757" }}>
+        <Arrow size={20} color="#D97757" />
+      </div>
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          color: "#1A1A1A",
+          letterSpacing: "-0.015em",
+          fontFamily: "Martel Sans, sans-serif",
+        }}
+      >
+        {right}
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
   return (
-    <div className="min-h-screen text-stone-950">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 sm:px-10">
-        <Link to="/" className="font-heading text-lg font-semibold tracking-tight">
-          crackd.fyi
+    <div style={{ minHeight: "100vh", position: "relative", overflow: "hidden", ...DOTS_BG }}>
+      {/* Header */}
+      <header
+        style={{
+          position: "relative",
+          padding: "26px 40px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Link to="/" style={{ textDecoration: "none" }}>
+          <Logo size={15} />
         </Link>
+        <nav style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          <a href="#" style={{ color: "#1A1A1A", fontSize: 13.5, textDecoration: "none", fontWeight: 500 }}>
+            Product
+          </a>
+          <a href="#" style={{ color: "#1A1A1A", fontSize: 13.5, textDecoration: "none", fontWeight: 500 }}>
+            Companies
+          </a>
+          <a href="#" style={{ color: "#1A1A1A", fontSize: 13.5, textDecoration: "none", fontWeight: 500 }}>
+            Pricing
+          </a>
+          <a href="#" style={{ color: "#1A1A1A", fontSize: 13.5, textDecoration: "none", fontWeight: 500 }}>
+            Blog
+          </a>
+        </nav>
         <Link
           to="/login"
-          className="rounded-md border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#1A1A1A",
+            color: "#FFFFFF",
+            borderRadius: 999,
+            padding: "8px 18px",
+            fontSize: 13,
+            fontWeight: 500,
+            textDecoration: "none",
+            border: "none",
+            cursor: "pointer",
+          }}
         >
-          Sign in
+          Sign in <Arrow size={12} color="#FFFFFF" />
         </Link>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-col px-6 pb-16 pt-10 sm:px-10 sm:pb-24 sm:pt-16">
-        <section className="grid gap-10 pb-16 pt-10 sm:pb-24 sm:pt-20">
-          <div className="max-w-3xl">
-            <p className="mb-5 text-sm font-medium uppercase tracking-[0.18em] text-stone-500">
-              Interview preparation, grounded in real data
-            </p>
-            <h1 className="font-heading text-5xl font-semibold leading-[1.02] text-stone-950 sm:text-7xl">
-              Crack your next interview.
-            </h1>
-            <p className="mt-6 max-w-2xl text-base leading-7 text-stone-600 sm:text-lg">
-              Build a focused prep plan from real interview questions, company-specific signal, and the skills behind both.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                to="/login"
-                className="rounded-md bg-stone-950 px-5 py-3 text-sm font-semibold !text-stone-50 transition hover:bg-stone-800 hover:!text-stone-50 visited:!text-stone-50"
-              >
-                Sign in with email
-              </Link>
-            </div>
+      {/* Hero */}
+      <section
+        style={{
+          position: "relative",
+          padding: "250px 40px 120px",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <h1
+            style={{
+              fontSize: "clamp(40px, 8vw, 80px)",
+              fontWeight: 700,
+              lineHeight: 1.02,
+              letterSpacing: "-0.04em",
+              color: "#1A1A1A",
+              maxWidth: 1000,
+              margin: "0 auto",
+              fontFamily: "Martel Sans, sans-serif",
+            }}
+          >
+            Built around the company. <br />Built around you.
+          </h1>
+          <p
+            style={{
+              marginTop: 28,
+              fontSize: 18,
+              color: "#6B6B6B",
+              maxWidth: 560,
+              margin: "28px auto 0",
+              lineHeight: 1.6,
+            }}
+          >
+            Crackd builds your prep around what Stripe, Google, and Meta actually
+            test — not a generic problem list.
+          </p>
+          <div
+            style={{
+              marginTop: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <Link
+              to="/login"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+                background: "#1A1A1A",
+                color: "#FFFFFF",
+                borderRadius: 999,
+                padding: "13px 24px",
+                fontSize: 14.5,
+                fontWeight: 500,
+                textDecoration: "none",
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#D97757",
+                  flexShrink: 0,
+                }}
+              />
+              Start preparing
+            </Link>
+            <button
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                background: "#FFFFFF",
+                color: "#1A1A1A",
+                border: "1px solid #1A1A1A",
+                borderRadius: 999,
+                padding: "13px 22px",
+                fontSize: 14.5,
+                fontWeight: 500,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              See how it works
+            </button>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
 
-      <footer className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6 text-sm text-stone-500 sm:px-10">
-        <span>crackd.fyi</span>
-        <Link to="/login" className="hover:text-stone-900">
-          Log in
-        </Link>
+      {/* Company strip */}
+      <section
+        style={{
+          position: "relative",
+          padding: "0 40px 80px",
+          textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            textTransform: "uppercase",
+            letterSpacing: "0.16em",
+            color: "#9A9A98",
+            marginBottom: 24,
+          }}
+        >
+          Trained on real interview data from
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 48,
+            flexWrap: "wrap",
+          }}
+        >
+          {["Stripe", "Google", "Meta", "Amazon", "Notion"].map((name) => (
+            <span
+              key={name}
+              style={{
+                color: "#1A1A1A",
+                opacity: 0.4,
+                fontSize: 17,
+                fontWeight: 500,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      {/* What makes it different */}
+      <section style={{ position: "relative", padding: "60px 40px 120px" }}>
+        <div style={{ maxWidth: 880, margin: "0 auto" }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              textTransform: "uppercase",
+              letterSpacing: "0.16em",
+              color: "#9A9A98",
+              marginBottom: 36,
+              textAlign: "center",
+            }}
+          >
+            What makes it different
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            <DiffRow
+              left="A pile of LeetCode problems"
+              right="A strategy built around your target company"
+            />
+            <div style={{ height: 1, background: "#E8E6E0" }} />
+            <DiffRow
+              left="Generic difficulty curves"
+              right="Frequencies pulled from 2,800+ real reports"
+            />
+            <div style={{ height: 1, background: "#E8E6E0" }} />
+            <DiffRow
+              left="A grind that hopes for luck"
+              right="A plan that closes your specific gaps"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer
+        style={{
+          position: "relative",
+          padding: "28px 40px",
+          borderTop: "1px solid #E8E6E0",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 16,
+          }}
+        >
+          <Logo size={13} />
+          <span style={{ fontSize: 12, color: "#9A9A98" }}>
+            Built for engineers targeting Tier-1.
+          </span>
+        </div>
       </footer>
     </div>
   );

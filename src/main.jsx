@@ -6,6 +6,7 @@ import { AuthGuard } from "./components/AuthGuard";
 import { DashboardPage } from "./pages/DashboardPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { SessionPage } from "./pages/SessionPage";
 
 function App() {
   return (
@@ -18,6 +19,14 @@ function App() {
           element={
             <AuthGuard>
               <DashboardPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/session/:sessionId"
+          element={
+            <AuthGuard>
+              <SessionPage />
             </AuthGuard>
           }
         />

@@ -6,26 +6,13 @@ function Logo() {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
         fontSize: 15,
         color: "#1A1A1A",
         fontWeight: 600,
         letterSpacing: "-0.02em",
       }}
     >
-      <span
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          background: "#D97757",
-          display: "inline-block",
-          flexShrink: 0,
-        }}
-      />
-      <span>
-        crackd<span style={{ color: "#D97757" }}>.fyi</span>
-      </span>
+      crackd<span style={{ color: "#D97757" }}>.fyi</span>
     </span>
   );
 }
@@ -36,10 +23,11 @@ export function AppNav({ email, onLogout, loggingOut, actions }) {
       style={{
         borderBottom: "1px solid #E8E6E0",
         background: "#F4F1EA",
+        backgroundImage: "radial-gradient(circle, #D8D6CE 1px, transparent 1px)",
+        backgroundSize: "16px 16px",
         position: "sticky",
         top: 0,
         zIndex: 40,
-        backdropFilter: "blur(8px)",
       }}
     >
       <div

@@ -8,6 +8,7 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { SessionPage } from "./pages/SessionPage";
+import { SkillPracticePage } from "./pages/SkillPracticePage";
 
 function App() {
   return (
@@ -36,6 +37,14 @@ function App() {
           element={
             <AuthGuard>
               <SessionPage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/session/:sessionId/skills/:sessionSkillId"
+          element={
+            <AuthGuard>
+              <SkillPracticePage />
             </AuthGuard>
           }
         />

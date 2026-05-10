@@ -38,26 +38,13 @@ function Logo({ size = 15 }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
         fontSize: size,
         color: "#1A1A1A",
         fontWeight: 600,
         letterSpacing: "-0.02em",
       }}
     >
-      <span
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          background: "#D97757",
-          display: "inline-block",
-          flexShrink: 0,
-        }}
-      />
-      <span>
-        crackd<span style={{ color: "#D97757" }}>.fyi</span>
-      </span>
+      crackd<span style={{ color: "#D97757" }}>.fyi</span>
     </span>
   );
 }

@@ -364,7 +364,19 @@ export function OnboardingPage() {
   const [timelineWeeks, setTimelineWeeks] = useState(4);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState("");
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await apiFetch("/api/user/auth/logout", { method: "POST" });
+    } finally {
+      localStorage.removeItem("crackd_user_token");
+      navigate("/", { replace: true });
+      setLoggingOut(false);
+    }
+  }
 
   useEffect(() => {
     apiFetch("/api/user/companies")
@@ -420,12 +432,32 @@ export function OnboardingPage() {
         <Link to="/" style={{ textDecoration: "none" }}>
           <Logo size={14} />
         </Link>
-        <Link
-          to="/dashboard"
-          style={{ fontSize: 12, color: "#6B6B6B", textDecoration: "none" }}
-        >
-          Skip to dashboard →
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <Link
+            to="/dashboard"
+            style={{ fontSize: 12, color: "#6B6B6B", textDecoration: "none" }}
+          >
+            Skip to dashboard →
+          </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            style={{
+              background: "none",
+              border: "1px solid #E0DDD3",
+              borderRadius: 999,
+              padding: "6px 14px",
+              fontSize: 12,
+              fontWeight: 500,
+              color: loggingOut ? "#9A9A98" : "#1A1A1A",
+              cursor: loggingOut ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            {loggingOut ? "Signing out…" : "Sign out"}
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "80px 40px 80px" }}>

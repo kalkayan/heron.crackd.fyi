@@ -234,19 +234,35 @@ function Badge({ style: styleName, text, lookup }) {
 
 
 function buildHierarchy(plan) {
-  const categories = plan.filter(s => s.skill_type === "category");
-  const techniques = plan.filter(s => s.skill_type === "technique");
-  const variants = plan.filter(s => s.skill_type === "variant");
+  const categories = [];
+  let currentCategory = null;
+  let currentTechnique = null;
 
-  return categories.map(cat => ({
-    ...cat,
-    techniques: techniques
-      .filter(tech => tech.parent_session_skill_id === cat.session_skill_id)
-      .map(tech => ({
-        ...tech,
-        variants: variants.filter(v => v.parent_session_skill_id === tech.session_skill_id)
-      }))
-  }));
+  for (const item of plan) {
+    if (item.skill_type === "category") {
+      currentCategory = { ...item, techniques: [] };
+      categories.push(currentCategory);
+      currentTechnique = null;
+    } else if (item.skill_type === "technique") {
+      currentTechnique = { ...item, variants: [] };
+      if (currentCategory) {
+        currentCategory.techniques.push(currentTechnique);
+      } else {
+        currentCategory = { skill_name: "General", techniques: [currentTechnique] };
+        categories.push(currentCategory);
+      }
+    } else if (item.skill_type === "variant") {
+      if (currentTechnique) {
+        currentTechnique.variants.push(item);
+      } else if (currentCategory) {
+        // If a variant appears directly under a category, we'll wrap it in a placeholder technique
+        const placeholder = { skill_name: "General", variants: [item] };
+        currentCategory.techniques.push(placeholder);
+        currentTechnique = placeholder;
+      }
+    }
+  }
+  return categories;
 }
 
 function VariantRow({ variant, sessionId }) {
@@ -293,6 +309,54 @@ function VariantRow({ variant, sessionId }) {
 }
 
 function TechniqueSection({ technique, sessionId }) {
+  const isLeaf = technique.variants.length === 0;
+
+  if (isLeaf && technique.session_skill_id) {
+    return (
+      <Link
+        to={`/session/${sessionId}/skills/${technique.session_skill_id}`}
+        style={{ textDecoration: "none" }}
+      >
+        <div 
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "16px 16px",
+            borderRadius: 12,
+            background: "#F9F8F4",
+            border: "1px solid #E5E2D8",
+            transition: "all 0.2s ease",
+            cursor: "pointer",
+            margin: "0 4px"
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.borderColor = "#D97757";
+            e.currentTarget.style.boxShadow = "0 2px 8px rgba(217,119,87,0.05)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.borderColor = "#E5E2D8";
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: technique.status === "completed" ? "#1A7A48" : technique.status === "in_progress" ? "#1D6FA4" : "#D8D6CE"
+            }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1A1A1A" }}>{technique.skill_name}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Badge style={technique.status} text={technique.status.replace("_", " ")} lookup={STATUS_STYLE} />
+            <span style={{ fontSize: 18, color: "#D97757" }}>→</span>
+          </div>
+        </div>
+      </Link>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ 
@@ -324,8 +388,13 @@ function CategoryAccordion({ category, sessionId }) {
   const [isExpanded, setIsExpanded] = useState(category.status === "in_progress");
   
   const allVariants = category.techniques.flatMap(t => t.variants);
-  const completedCount = allVariants.filter(v => v.status === "completed").length;
-  const totalCount = allVariants.length;
+  const useTechniquesAsUnits = allVariants.length === 0;
+  
+  const completedCount = useTechniquesAsUnits 
+    ? category.techniques.filter(t => t.status === "completed").length
+    : allVariants.filter(v => v.status === "completed").length;
+    
+  const totalCount = useTechniquesAsUnits ? category.techniques.length : allVariants.length;
 
   return (
     <article

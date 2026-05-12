@@ -46,40 +46,41 @@ function todayFromSkills(skills) {
 const RAIL_CARD = {
   background: "#F6F4ED",
   border: "1px solid #E5E2D8",
-  borderRadius: 18,
-  padding: "18px 18px",
+  borderRadius: 24,
+  padding: "24px 24px",
 };
 
 function RailSkill({ name, detail, priority, current }) {
   const dotColor = priority === "high" ? "#D97757" : priority === "med" ? "#C8893A" : "#9A9A98";
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
       <span style={{
-        width: 16, height: 16, borderRadius: "50%",
+        width: 18, height: 18, borderRadius: "50%",
         border: `1.5px solid ${current ? "#D97757" : dotColor}`,
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         flexShrink: 0, marginTop: 1,
       }}>
         <span style={{
-          width: current ? 6 : 5, height: current ? 6 : 5,
+          width: current ? 8 : 6, height: current ? 8 : 6,
           borderRadius: "50%",
           background: current ? "#D97757" : dotColor,
         }} />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12.5, fontWeight: current ? 600 : 500, color: "#1A1A1A", letterSpacing: "-0.005em" }}>
+        <div style={{ fontSize: 13, fontWeight: current ? 700 : 600, color: "#1A1A1A", letterSpacing: "-0.01em" }}>
           {name}
           {current && (
-            <span style={{ marginLeft: 6, fontSize: 9.5, color: "#D97757", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <span style={{ marginLeft: 8, fontSize: 10, color: "#D97757", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               now
             </span>
           )}
         </div>
-        <div style={{ fontSize: 11, color: "#9A9A98", marginTop: 2 }}>{detail}</div>
+        <div style={{ fontSize: 11.5, color: "#9A9A98", marginTop: 3 }}>{detail}</div>
       </div>
     </div>
   );
 }
+
 
 function RailRow({ label, value, dot }) {
   return (
@@ -171,6 +172,45 @@ function FromClaudeCard({ text }) {
     </div>
   );
 }
+
+function CompanyLinkCard({ companyName, companyId }) {
+  if (!companyId) return null;
+  return (
+    <Link to={`/companies/${companyId}`} style={{ textDecoration: "none" }}>
+      <div 
+        style={{
+          ...RAIL_CARD,
+          background: "#D97757",
+          color: "#FFFFFF",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          transition: "all 0.2s ease-in-out",
+          cursor: "pointer",
+          border: "none",
+          padding: "20px 24px",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "#E0886A";
+          e.currentTarget.style.boxShadow = "0 8px 24px rgba(217,119,87,0.15)";
+          e.currentTarget.style.transform = "translateY(-1px)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "#D97757";
+          e.currentTarget.style.boxShadow = "none";
+          e.currentTarget.style.transform = "translateY(0)";
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 14, fontWeight: 800 }}>View {companyName} interview brief</span>
+          <span style={{ fontSize: 18 }}>→</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+
 
 function Badge({ style: styleName, text, lookup }) {
   const s = lookup[styleName] || lookup[Object.keys(lookup)[0]];
@@ -308,7 +348,7 @@ export function SessionPage() {
     <div style={{ minHeight: "100vh" }}>
       <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} />
 
-      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 40px 80px" }}>
+      <main style={{ maxWidth: 1240, margin: "0 auto", padding: "40px 40px 80px" }}>
         {loading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "40vh" }}>
             <div
@@ -326,13 +366,13 @@ export function SessionPage() {
         ) : error ? (
           <p style={{ fontSize: 13, color: "#C0392B" }}>{error}</p>
         ) : session ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 28, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 32, alignItems: "start" }}>
 
             {/* Left: header + skill plan */}
             <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
             {/* Page header */}
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
-              <div>
+              <div style={{ flex: 1 }}>
                 <Link
                   to="/dashboard?from=session"
                   style={{ fontSize: 13, color: "#9A9A98", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
@@ -341,22 +381,28 @@ export function SessionPage() {
                 >
                   ← Dashboard
                 </Link>
-                <h1
-                  style={{
-                    marginTop: 16,
-                    fontSize: "clamp(28px, 4vw, 44px)",
-                    fontWeight: 700,
-                    letterSpacing: "-0.03em",
-                    color: "#1A1A1A",
-                    fontFamily: "Martel Sans, sans-serif",
-                    lineHeight: 1.0,
-                  }}
-                >
-                  All the things you need to know about {session.company_name}
-                </h1>
-                <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+                <div style={{ marginTop: 24 }}>
+                  <span style={{ color: "#D97757", fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.25em", marginBottom: 12, display: "block" }}>
+                    Personalized Plan
+                  </span>
+                  <h1
+                    style={{
+                      fontSize: "clamp(32px, 5vw, 56px)",
+                      fontWeight: 900,
+                      letterSpacing: "-0.04em",
+                      color: "#1A1A1A",
+                      fontFamily: "Martel Sans, sans-serif",
+                      lineHeight: 1.05,
+                      maxWidth: 800,
+                    }}
+                  >
+                    A strategy built for you to master {session.company_name}
+                  </h1>
+                </div>
+
+                <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
                   {session.timeline_weeks && (
-                    <span style={{ fontSize: 13, color: "#6B6B6B" }}>
+                    <span style={{ fontSize: 13, color: "#6B6B6B", fontWeight: 500 }}>
                       {session.timeline_weeks} weeks
                     </span>
                   )}
@@ -366,7 +412,7 @@ export function SessionPage() {
                       borderRadius: 999,
                       padding: "3px 10px",
                       fontSize: 11,
-                      fontWeight: 500,
+                      fontWeight: 600,
                       textTransform: "capitalize",
                       ...(STATUS_STYLE[session.status] || STATUS_STYLE.queued),
                     }}
@@ -451,7 +497,7 @@ export function SessionPage() {
                       </span>
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       {groupedPlan[type].map((item) => (
                         <Link
                           key={item.session_skill_id}
@@ -462,25 +508,33 @@ export function SessionPage() {
                           style={{
                             background: "#FFFFFF",
                             border: "1px solid #E5E2D8",
-                            borderRadius: 14,
-                            padding: "18px 20px",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                            borderRadius: 24,
+                            padding: "24px 28px",
+                            boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
                             display: "flex",
-                            alignItems: "flex-start",
+                            alignItems: "center",
                             justifyContent: "space-between",
                             gap: 16,
                             flexWrap: "wrap",
                             cursor: "pointer",
-                            transition: "border-color 0.15s, box-shadow 0.15s",
+                            transition: "all 0.2s ease-in-out",
                           }}
-                          onMouseEnter={e => { e.currentTarget.style.borderColor = "#C8C5BB"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.07)"; }}
-                          onMouseLeave={e => { e.currentTarget.style.borderColor = "#E5E2D8"; e.currentTarget.style.boxShadow = "0 1px 2px rgba(0,0,0,0.03)"; }}
+                          onMouseEnter={e => { 
+                            e.currentTarget.style.borderColor = "#C8C5BB"; 
+                            e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.04)";
+                            e.currentTarget.style.transform = "translateY(-1px)";
+                          }}
+                          onMouseLeave={e => { 
+                            e.currentTarget.style.borderColor = "#E5E2D8"; 
+                            e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.02)";
+                            e.currentTarget.style.transform = "translateY(0)";
+                          }}
                         >
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                             <h2
                               style={{
-                                fontSize: 17,
-                                fontWeight: 700,
+                                fontSize: 18,
+                                fontWeight: 800,
                                 letterSpacing: "-0.02em",
                                 color: "#1A1A1A",
                                 margin: 0,
@@ -489,7 +543,7 @@ export function SessionPage() {
                             >
                               {item.skill_name}
                             </h2>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                               {item.difficulty && (
                                 <Badge style={item.difficulty} text={item.difficulty} lookup={DIFFICULTY_STYLE} />
                               )}
@@ -501,24 +555,25 @@ export function SessionPage() {
                                     border: "1px solid #E0DDD3",
                                     display: "inline-flex",
                                     borderRadius: 999,
-                                    padding: "3px 10px",
+                                    padding: "3px 12px",
                                     fontSize: 11,
-                                    fontWeight: 500,
+                                    fontWeight: 600,
                                   }}
                                 >
-                                  asked {item.count} {item.count === 1 ? "time" : "times"}
+                                  {item.count} appearances
                                 </span>
                               )}
                             </div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                             <Badge style={item.status} text={item.status.replace("_", " ")} lookup={STATUS_STYLE} />
-                            <span style={{ fontSize: 16, color: "#9A9A98" }}>›</span>
+                            <span style={{ fontSize: 20, color: "#D8D6CE", fontWeight: 300 }}>›</span>
                           </div>
                         </article>
                         </Link>
                       ))}
                     </div>
+
                   </section>
                 ) : null,
               )}
@@ -551,6 +606,7 @@ export function SessionPage() {
               const firstGap = capabilities.find(s => s.confidence !== "high");
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "sticky", top: 72 }}>
+                  <CompanyLinkCard companyName={session.company_name} companyId={session.company_id} />
                   {skillBars.length > 0 && (
                     <SkillProgressCard skills={skillBars} company={session.company_name} />
                   )}

@@ -212,23 +212,214 @@ function CompanyLinkCard({ companyName, companyId }) {
 
 
 
-function Badge({ style: styleName, text, lookup }) {
-  const s = lookup[styleName] || lookup[Object.keys(lookup)[0]];
+function buildHierarchy(plan) {
+  const categories = plan.filter(s => s.skill_type === "category");
+  const techniques = plan.filter(s => s.skill_type === "technique");
+  const variants = plan.filter(s => s.skill_type === "variant");
+
+  return categories.map(cat => ({
+    ...cat,
+    techniques: techniques
+      .filter(tech => tech.parent_session_skill_id === cat.session_skill_id)
+      .map(tech => ({
+        ...tech,
+        variants: variants.filter(v => v.parent_session_skill_id === tech.session_skill_id)
+      }))
+  }));
+}
+
+function VariantRow({ variant, sessionId }) {
   return (
-    <span
-      style={{
-        ...s,
-        display: "inline-flex",
-        borderRadius: 999,
-        padding: "3px 10px",
+    <Link
+      to={`/session/${sessionId}/skills/${variant.session_skill_id}`}
+      style={{ textDecoration: "none" }}
+    >
+      <div 
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          borderRadius: 12,
+          transition: "all 0.2s ease",
+          cursor: "pointer",
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = "#F9F8F4";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = "transparent";
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: variant.status === "completed" ? "#1A7A48" : variant.status === "in_progress" ? "#1D6FA4" : "#D8D6CE"
+          }} />
+          <span style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A" }}>{variant.skill_name}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {variant.difficulty && (
+            <Badge style={variant.difficulty} text={variant.difficulty} lookup={DIFFICULTY_STYLE} />
+          )}
+          <span style={{ fontSize: 16, color: "#D8D6CE" }}>›</span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function TechniqueSection({ technique, sessionId }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ 
+        padding: "8px 16px",
         fontSize: 11,
-        fontWeight: 500,
-        letterSpacing: "0.02em",
-        textTransform: "capitalize",
+        fontWeight: 800,
+        color: "#9A9A98",
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }}>
+        {technique.skill_name}
+        <span style={{ fontWeight: 600, letterSpacing: "normal", textTransform: "none" }}>
+          {technique.variants.length} {technique.variants.length === 1 ? "variant" : "variants"}
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {technique.variants.map(v => (
+          <VariantRow key={v.session_skill_id} variant={v} sessionId={sessionId} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CategoryAccordion({ category, sessionId }) {
+  const [isExpanded, setIsExpanded] = useState(category.status === "in_progress");
+  
+  const allVariants = category.techniques.flatMap(t => t.variants);
+  const completedCount = allVariants.filter(v => v.status === "completed").length;
+  const totalCount = allVariants.length;
+
+  return (
+    <article
+      style={{
+        background: "#FFFFFF",
+        border: "1px solid #E5E2D8",
+        borderRadius: 24,
+        overflow: "hidden",
+        boxShadow: isExpanded ? "0 8px 16px rgba(0,0,0,0.04)" : "0 1px 4px rgba(0,0,0,0.02)",
+        transition: "all 0.3s ease-in-out",
+        transform: isExpanded ? "translateY(-1px)" : "translateY(0)",
       }}
     >
-      {text}
-    </span>
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        style={{
+          padding: "24px 28px",
+          cursor: "pointer",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+        onMouseEnter={e => {
+          if (!isExpanded) {
+            e.currentTarget.parentElement.style.borderColor = "#C8C5BB";
+            e.currentTarget.parentElement.style.boxShadow = "0 4px 12px rgba(0,0,0,0.03)";
+          }
+        }}
+        onMouseLeave={e => {
+          if (!isExpanded) {
+            e.currentTarget.parentElement.style.borderColor = "#E5E2D8";
+            e.currentTarget.parentElement.style.boxShadow = "0 1px 4px rgba(0,0,0,0.02)";
+          }
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <h2 style={{
+                fontSize: 20,
+                fontWeight: 900,
+                letterSpacing: "-0.03em",
+                color: "#1A1A1A",
+                margin: 0,
+                fontFamily: "Martel Sans, sans-serif",
+              }}>
+                {category.skill_name}
+              </h2>
+              <Badge style={category.status} text={category.status.replace("_", " ")} lookup={STATUS_STYLE} />
+            </div>
+            {category.description && (
+              <p style={{ fontSize: 14, color: "#6B6B6B", margin: 0, lineHeight: 1.5, maxWidth: "90%" }}>
+                {category.description}
+              </p>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A1A" }}>
+              {completedCount}<span style={{ color: "#D8D6CE", margin: "0 2px" }}>/</span>{totalCount}
+            </div>
+            <span style={{ 
+              fontSize: 24, 
+              color: "#D8D6CE", 
+              transition: "transform 0.3s ease",
+              transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+              lineHeight: 1
+            }}>›</span>
+          </div>
+        </div>
+
+        {/* Technique Tags for collapsed state */}
+        {!isExpanded && category.techniques.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {category.techniques.map(t => (
+              <span 
+                key={t.session_skill_id}
+                style={{
+                  padding: "4px 12px",
+                  background: "#F6F4ED",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#9A9A98",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em"
+                }}
+              >
+                {t.skill_name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {isExpanded && (
+        <div style={{ 
+          padding: "0 12px 24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          borderTop: "1px solid #F4F1EA",
+          marginTop: -4,
+          paddingTop: 20
+        }}>
+          {category.techniques.map(t => (
+            <TechniqueSection key={t.session_skill_id} technique={t} sessionId={sessionId} />
+          ))}
+          {category.techniques.length === 0 && (
+            <div style={{ padding: "12px 16px", fontSize: 13, color: "#9A9A98", fontStyle: "italic" }}>
+              No techniques published for this category yet.
+            </div>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -274,13 +465,7 @@ export function SessionPage() {
     load();
   }, [sessionId]);
 
-  const groupedPlan = useMemo(() => {
-    const groups = { category: [], technique: [], variant: [] };
-    for (const item of plan) {
-      if (groups[item.skill_type]) groups[item.skill_type].push(item);
-    }
-    return groups;
-  }, [plan]);
+  const hierarchicalPlan = useMemo(() => buildHierarchy(plan), [plan]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -476,124 +661,32 @@ export function SessionPage() {
               </div>
             </div>
 
-            {/* Skill plan */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-              {orderedTypes.map((type) =>
-                groupedPlan[type].length > 0 ? (
-                  <section key={type} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span
-                        style={{
-                          ...(TYPE_STYLE[type] || TYPE_STYLE.category),
-                          display: "inline-flex",
-                          borderRadius: 999,
-                          padding: "3px 12px",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.1em",
-                        }}
-                      >
-                        {type}
-                      </span>
-                      <span style={{ fontSize: 12, color: "#9A9A98" }}>
-                        {groupedPlan[type].length} {groupedPlan[type].length === 1 ? "skill" : "skills"}
-                      </span>
-                    </div>
+            {/* Hierarchical Skill plan */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {hierarchicalPlan.map((category) => (
+                <CategoryAccordion 
+                  key={category.session_skill_id} 
+                  category={category} 
+                  sessionId={sessionId} 
+                />
+              ))}
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {groupedPlan[type].map((item) => (
-                        <Link
-                          key={item.session_skill_id}
-                          to={`/session/${sessionId}/skills/${item.session_skill_id}`}
-                          style={{ textDecoration: "none" }}
-                        >
-                        <article
-                          style={{
-                            background: "#FFFFFF",
-                            border: "1px solid #E5E2D8",
-                            borderRadius: 24,
-                            padding: "24px 28px",
-                            boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 16,
-                            flexWrap: "wrap",
-                            cursor: "pointer",
-                            transition: "all 0.2s ease-in-out",
-                          }}
-                          onMouseEnter={e => { 
-                            e.currentTarget.style.borderColor = "#C8C5BB"; 
-                            e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.04)";
-                            e.currentTarget.style.transform = "translateY(-1px)";
-                          }}
-                          onMouseLeave={e => { 
-                            e.currentTarget.style.borderColor = "#E5E2D8"; 
-                            e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.02)";
-                            e.currentTarget.style.transform = "translateY(0)";
-                          }}
-                        >
-                          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                            <h2
-                              style={{
-                                fontSize: 18,
-                                fontWeight: 800,
-                                letterSpacing: "-0.02em",
-                                color: "#1A1A1A",
-                                margin: 0,
-                                fontFamily: "Martel Sans, sans-serif",
-                              }}
-                            >
-                              {item.skill_name}
-                            </h2>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                              {item.difficulty && (
-                                <Badge style={item.difficulty} text={item.difficulty} lookup={DIFFICULTY_STYLE} />
-                              )}
-                              {item.count > 0 && (
-                                <span
-                                  style={{
-                                    background: "#F5F4F1",
-                                    color: "#6B6B6B",
-                                    border: "1px solid #E0DDD3",
-                                    display: "inline-flex",
-                                    borderRadius: 999,
-                                    padding: "3px 12px",
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {item.count} appearances
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                            <Badge style={item.status} text={item.status.replace("_", " ")} lookup={STATUS_STYLE} />
-                            <span style={{ fontSize: 20, color: "#D8D6CE", fontWeight: 300 }}>›</span>
-                          </div>
-                        </article>
-                        </Link>
-                      ))}
-                    </div>
-
-                  </section>
-                ) : null,
-              )}
-
-              {plan.length === 0 && (
+              {hierarchicalPlan.length === 0 && (
                 <div
                   style={{
                     background: "#FFFFFF",
                     border: "1px solid #E5E2D8",
-                    borderRadius: 14,
-                    padding: "28px 24px",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                    borderRadius: 24,
+                    padding: "48px 24px",
+                    textAlign: "center",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
                   }}
                 >
-                  <p style={{ fontSize: 14, color: "#6B6B6B", margin: 0 }}>
-                    No published skills are available for this company yet.
+                  <p style={{ fontSize: 15, fontWeight: 500, color: "#9A9A98", margin: 0 }}>
+                    Building your personalized training plan...
+                  </p>
+                  <p style={{ fontSize: 13, color: "#D8D6CE", marginTop: 8 }}>
+                    We're mapping {session.company_name}'s high-recurrence patterns to your strategy.
                   </p>
                 </div>
               )}
@@ -631,3 +724,4 @@ export function SessionPage() {
     </div>
   );
 }
+

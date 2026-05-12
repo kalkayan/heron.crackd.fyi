@@ -210,6 +210,27 @@ function CompanyLinkCard({ companyName, companyId }) {
   );
 }
 
+function Badge({ style: styleName, text, lookup }) {
+  const s = lookup[styleName] || lookup[Object.keys(lookup)[0]];
+  return (
+    <span
+      style={{
+        ...s,
+        display: "inline-flex",
+        borderRadius: 999,
+        padding: "3px 10px",
+        fontSize: 11,
+        fontWeight: 500,
+        letterSpacing: "0.02em",
+        textTransform: "capitalize",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+
 
 
 function buildHierarchy(plan) {

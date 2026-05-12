@@ -397,7 +397,7 @@ export function OnboardingPage() {
         setError(data.error || "Unable to create session.");
         return;
       }
-      navigate(`/session/${data.id}`, { replace: true });
+      navigate(`/companies/${selectedCompany.id}`, { replace: true });
     } catch {
       setError("Unable to create session.");
     } finally {

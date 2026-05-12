@@ -17,7 +17,7 @@ function Logo() {
   );
 }
 
-export function AppNav({ email, onLogout, loggingOut, actions }) {
+export function AppNav({ email, onLogout, loggingOut, actions, leftAction }) {
   return (
     <header
       style={{
@@ -32,7 +32,7 @@ export function AppNav({ email, onLogout, loggingOut, actions }) {
     >
       <div
         style={{
-          maxWidth: 1100,
+          maxWidth: 1240,
           margin: "0 auto",
           padding: "0 40px",
           height: 56,
@@ -42,9 +42,12 @@ export function AppNav({ email, onLogout, loggingOut, actions }) {
           gap: 16,
         }}
       >
-        <Link to="/" style={{ textDecoration: "none" }}>
-          <Logo />
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 24, flex: 1 }}>
+          {leftAction}
+          <Link to="/" style={{ textDecoration: "none" }}>
+            <Logo />
+          </Link>
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {actions}

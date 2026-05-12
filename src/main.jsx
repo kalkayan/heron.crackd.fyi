@@ -8,6 +8,7 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { OnboardingPage } from "./pages/OnboardingPage";
 import { SessionPage } from "./pages/SessionPage";
+import { CompanyPage } from "./pages/CompanyPage";
 import { SkillPracticePage } from "./pages/SkillPracticePage";
 
 function App() {
@@ -45,6 +46,14 @@ function App() {
           element={
             <AuthGuard>
               <SkillPracticePage />
+            </AuthGuard>
+          }
+        />
+        <Route
+          path="/companies/:companyId"
+          element={
+            <AuthGuard>
+              <CompanyPage />
             </AuthGuard>
           }
         />

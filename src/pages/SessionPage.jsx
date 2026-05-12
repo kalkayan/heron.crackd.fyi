@@ -344,9 +344,20 @@ export function SessionPage() {
 
   const isActive = session?.status === "active";
 
+  const backLink = (
+    <Link
+      to="/dashboard?from=session"
+      style={{ fontSize: 13, color: "#9A9A98", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = "#1A1A1A")}
+      onMouseLeave={(e) => (e.currentTarget.style.color = "#9A9A98")}
+    >
+      Dashboard
+    </Link>
+  );
+
   return (
     <div style={{ minHeight: "100vh" }}>
-      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} />
+      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} leftAction={backLink} />
 
       <main style={{ maxWidth: 1240, margin: "0 auto", padding: "40px 40px 80px" }}>
         {loading ? (
@@ -373,18 +384,11 @@ export function SessionPage() {
             {/* Page header */}
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
               <div style={{ flex: 1 }}>
-                <Link
-                  to="/dashboard?from=session"
-                  style={{ fontSize: 13, color: "#9A9A98", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#1A1A1A")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#9A9A98")}
-                >
-                  ← Dashboard
-                </Link>
                 <div style={{ marginTop: 24 }}>
                   <span style={{ color: "#D97757", fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.25em", marginBottom: 12, display: "block" }}>
                     Personalized Plan
                   </span>
+
                   <h1
                     style={{
                       fontSize: "clamp(32px, 5vw, 56px)",

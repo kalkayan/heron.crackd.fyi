@@ -17,11 +17,10 @@ function Logo() {
   );
 }
 
-export function AppNav({ email, onLogout, loggingOut, actions, leftAction }) {
+export function AppNav({ email, onLogout, loggingOut, actions, leftAction, credits = 10 }) {
   return (
     <header
       style={{
-        borderBottom: "1px solid #E8E6E0",
         background: "#F4F1EA",
         backgroundImage: "radial-gradient(circle, #D8D6CE 1px, transparent 1px)",
         backgroundSize: "16px 16px",
@@ -35,33 +34,41 @@ export function AppNav({ email, onLogout, loggingOut, actions, leftAction }) {
           maxWidth: 1240,
           margin: "0 auto",
           padding: "0 40px",
-          height: 56,
+          height: 60,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 16,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 24, flex: 1 }}>
-          {leftAction}
-          <Link to="/" style={{ textDecoration: "none" }}>
-            <Logo />
-          </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 20, flex: 1, height: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+            <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center" }}>
+              <Logo />
+            </Link>
+            {leftAction}
+          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {actions}
-          {email && (
-            <span
-              style={{
-                fontSize: 13,
-                color: "#9A9A98",
-                padding: "0 4px",
-              }}
-            >
-              {email}
-            </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {credits !== undefined && (
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 6, 
+              fontSize: 11, 
+              fontWeight: 700, 
+              color: "#9A9A98", 
+              textTransform: "uppercase", 
+              letterSpacing: "0.1em",
+              marginRight: 8
+            }}>
+              AI credits used 
+              <span style={{ color: "#D97757" }}>→</span>
+              <span style={{ color: "#1A1A1A" }}>{credits}</span>
+            </div>
           )}
+          {actions}
           <button
             type="button"
             onClick={onLogout}
@@ -88,3 +95,4 @@ export function AppNav({ email, onLogout, loggingOut, actions, leftAction }) {
     </header>
   );
 }
+

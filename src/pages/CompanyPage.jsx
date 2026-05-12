@@ -262,13 +262,13 @@ export function CompanyPage() {
 
   const backLink = (
     <Link to="/" className="text-xs font-black text-[#9A9A98] hover:text-[#1A1A1A] transition-colors uppercase tracking-widest">
-      ← Dashboard
+      Dashboard
     </Link>
   );
 
   return (
     <div className="min-h-screen bg-[#F4F1EA] bg-[radial-gradient(circle,_#D8D6CE_1px,_transparent_1px)] bg-[size:16px_16px] selection:bg-[#D97757]/20">
-      <AppNav leftAction={backLink} />
+      <AppNav leftAction={backLink} credits={10} />
       
       <main className="max-w-[1240px] mx-auto px-10 pt-16 pb-40">
         {/* --- HERO ROW --- */}

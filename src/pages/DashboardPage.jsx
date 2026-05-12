@@ -210,6 +210,7 @@ export function DashboardPage() {
         onLogout={handleLogout}
         loggingOut={loggingOut}
         actions={newSessionAction}
+        credits={10}
       />
 
       <main

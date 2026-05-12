@@ -118,7 +118,7 @@ export function SkillPracticePage() {
 
   return (
     <div style={{ minHeight: "100vh" }}>
-      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} />
+      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} credits={10} />
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 40px 80px" }}>
         {loading ? (

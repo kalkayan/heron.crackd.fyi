@@ -432,8 +432,7 @@ function PlanTimeline({ plan, sessionId, generating }) {
                 onMouseEnter={e => e.currentTarget.querySelector(".vl").style.color = "#D97757"}
                 onMouseLeave={e => e.currentTarget.querySelector(".vl").style.color = vColor}
               >
-                {/* indented rail — aligns dot under technique label */}
-                <div style={{ width: RAIL + 14, display: "flex", justifyContent: "flex-end", flexShrink: 0, paddingRight: 4 }}>
+                <div style={{ width: RAIL, display: "flex", justifyContent: "flex-end", flexShrink: 0, paddingRight: 4 }}>
                   <div style={{ width: 7, height: 7, borderRadius: "50%", border: `1.5px solid ${vColor}`, background: "#FFFFFF" }} />
                 </div>
                 <span className="vl" style={{
@@ -442,13 +441,19 @@ function PlanTimeline({ plan, sessionId, generating }) {
                 }}>
                   {item.skill_name}
                 </span>
+                <span style={{
+                  fontSize: 9.5, fontWeight: 600, letterSpacing: "0.05em",
+                  textTransform: "uppercase", color: "#A86B1A",
+                  background: "#FFF8EB", border: "1px solid #F0D9A0",
+                  borderRadius: 999, padding: "1px 7px", marginLeft: 6, flexShrink: 0,
+                }}>variant</span>
                 {item.status === "completed" && (
                   <span style={{ marginLeft: 8, fontSize: 11, color: "#1A7A48", fontWeight: 700 }}>✓</span>
                 )}
               </Link>
               {!isLast && (
                 <div style={{ display: "flex" }}>
-                  <div style={{ width: RAIL + 14, display: "flex", justifyContent: "flex-end", paddingRight: 7 }}>
+                  <div style={{ width: RAIL, display: "flex", justifyContent: "flex-end", paddingRight: 7 }}>
                     <div style={{ width: 1.5, height: 12, background: LINE }} />
                   </div>
                 </div>

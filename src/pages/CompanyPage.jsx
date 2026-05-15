@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AppNav } from "../components/AppNav";
 import { apiFetch } from "../lib/utils";
@@ -87,7 +87,8 @@ export function CompanyPage() {
       setRounds(Array.isArray(rdData.rounds) ? rdData.rounds : []);
       
       const sessions = Array.isArray(sData.sessions) ? sData.sessions : [];
-      setUserSessions(sessions.filter(s => s.company_id === companyId));
+      const companySessions = sessions.filter(s => s.company_id === companyId);
+      setUserSessions(companySessions);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -99,6 +100,22 @@ export function CompanyPage() {
     load();
     window.scrollTo(0, 0);
   }, [load]);
+
+  // Poll sessions while a plan is generating for this company
+  useEffect(() => {
+    const isGenerating = userSessions[0]?.plan_status === "generating";
+    if (!isGenerating) return;
+    const interval = setInterval(async () => {
+      try {
+        const resp = await apiFetch("/api/user/sessions");
+        if (!resp) return;
+        const data = await resp.json();
+        const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+        setUserSessions(sessions.filter(s => s.company_id === companyId));
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [userSessions, companyId]);
 
   // --- Intelligence Engine ---
 
@@ -327,21 +344,41 @@ export function CompanyPage() {
               </p>
             </div>
 
-            <div className={`${CARD_CLASS} !p-10 bg-[#1A1A1A] border-none text-white overflow-hidden relative`}>
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <svg width="60" height="60" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.45l8.15 14.1H3.85L12 5.45z"/></svg>
-              </div>
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-6 block relative">Master the loop</span>
-              <p className="text-[16px] text-gray-300 font-medium mb-10 leading-relaxed relative">
-                This brief shows what {company.name} asks; the next step helps you master exactly that.
-              </p>
-              <Link 
-                to={userSessions.length > 0 ? `/session/${userSessions[0].id}` : "/start"}
-                className="w-full bg-[#D97757] hover:bg-[#E0886A] text-white py-5 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] relative"
-              >
-                Start practicing
-              </Link>
-            </div>
+            {(() => {
+              const activeSession = userSessions[0];
+              const isGenerating = activeSession?.plan_status === "generating";
+              return (
+                <div className={`${CARD_CLASS} !p-10 bg-[#1A1A1A] border-none text-white overflow-hidden relative`}>
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.45l8.15 14.1H3.85L12 5.45z"/></svg>
+                  </div>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-6 block relative">Master the loop</span>
+                  <p className="text-[16px] text-gray-300 font-medium mb-10 leading-relaxed relative">
+                    This brief shows what {company.name} asks; the next step helps you master exactly that.
+                  </p>
+                  {isGenerating && (
+                    <div className="flex items-center gap-3 mb-6 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
+                      <span style={{
+                        display: "inline-block",
+                        width: 12, height: 12, borderRadius: "50%", flexShrink: 0,
+                        border: "2px solid rgba(255,255,255,0.2)",
+                        borderTopColor: "#D97757",
+                        animation: "spin 0.8s linear infinite",
+                      }} />
+                      <span className="text-[12px] text-gray-300 font-medium">
+                        AI is building your personalised plan…
+                      </span>
+                    </div>
+                  )}
+                  <Link
+                    to={activeSession ? `/session/${activeSession.id}` : "/start"}
+                    className="w-full bg-[#D97757] hover:bg-[#E0886A] text-white py-5 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] relative"
+                  >
+                    {isGenerating ? "View session" : activeSession ? "Continue practising" : "Start practising"}
+                  </Link>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -616,17 +653,34 @@ export function CompanyPage() {
           <p className="text-xl text-[#6B6B6B] leading-[1.6] mb-12 font-medium tracking-tight">
             You now know how {company.name} interviews; the next step is a calibrated training session that helps you master exactly those patterns.
           </p>
-          <div className="flex flex-col items-center gap-8">
-            <Link 
-              to={userSessions.length > 0 ? `/session/${userSessions[0].id}` : "/start"}
-              className="px-12 py-6 bg-[#D97757] hover:bg-[#E0886A] text-white rounded-2xl text-[17px] font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(217,119,87,0.15)]"
-            >
-              Start {company.name} prep session
-            </Link>
-            <button className="text-sm font-black text-[#9A9A98] hover:text-[#1A1A1A] transition-colors uppercase tracking-[0.2em]">
-              Preview training methodology
-            </button>
-          </div>
+          {(() => {
+            const activeSession = userSessions[0];
+            const isGenerating = activeSession?.plan_status === "generating";
+            return (
+              <div className="flex flex-col items-center gap-6">
+                {isGenerating && (
+                  <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-[#FBF1ED] border border-[#F0D6C7]">
+                    <span style={{
+                      display: "inline-block",
+                      width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+                      border: "2px solid #F0D6C7",
+                      borderTopColor: "#D97757",
+                      animation: "spin 0.8s linear infinite",
+                    }} />
+                    <span className="text-[13px] text-[#D97757] font-semibold">
+                      Your {company.name} plan is being built — it'll be ready in a moment
+                    </span>
+                  </div>
+                )}
+                <Link
+                  to={activeSession ? `/session/${activeSession.id}` : "/start"}
+                  className="px-12 py-6 bg-[#D97757] hover:bg-[#E0886A] text-white rounded-2xl text-[17px] font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(217,119,87,0.15)]"
+                >
+                  {isGenerating ? "View session" : activeSession ? `Continue ${company.name} prep` : `Start ${company.name} prep session`}
+                </Link>
+              </div>
+            );
+          })()}
         </div>
       </main>
     </div>

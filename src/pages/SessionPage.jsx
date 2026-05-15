@@ -52,23 +52,30 @@ const RAIL_CARD = {
 };
 
 function RailSkill({ name, detail, priority, current }) {
-  const dotColor = priority === "high" ? "#D97757" : priority === "med" ? "#C8893A" : "#9A9A98";
+  const done = priority === "done";
+  const dotColor = done ? "#1A7A48" : priority === "high" ? "#D97757" : "#C8C5BB";
+
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
       <span style={{
         width: 18, height: 18, borderRadius: "50%",
-        border: `1.5px solid ${current ? "#D97757" : dotColor}`,
+        border: `1.5px solid ${dotColor}`,
+        background: done ? "#1A7A48" : "transparent",
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         flexShrink: 0, marginTop: 1,
       }}>
-        <span style={{
-          width: current ? 8 : 6, height: current ? 8 : 6,
-          borderRadius: "50%",
-          background: current ? "#D97757" : dotColor,
-        }} />
+        {done
+          ? <span style={{ fontSize: 9, color: "#FFFFFF", fontWeight: 800 }}>✓</span>
+          : <span style={{ width: current ? 8 : 6, height: current ? 8 : 6, borderRadius: "50%", background: dotColor }} />
+        }
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: current ? 700 : 600, color: "#1A1A1A", letterSpacing: "-0.01em" }}>
+        <div style={{
+          fontSize: 13, fontWeight: current ? 700 : 500,
+          color: done ? "#9A9A98" : "#1A1A1A",
+          letterSpacing: "-0.01em",
+          textDecoration: done ? "line-through" : "none",
+        }}>
           {name}
           {current && (
             <span style={{ marginLeft: 8, fontSize: 10, color: "#D97757", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em" }}>
@@ -76,7 +83,7 @@ function RailSkill({ name, detail, priority, current }) {
             </span>
           )}
         </div>
-        <div style={{ fontSize: 11.5, color: "#9A9A98", marginTop: 3 }}>{detail}</div>
+        {!done && detail && <div style={{ fontSize: 11.5, color: "#9A9A98", marginTop: 3 }}>{detail}</div>}
       </div>
     </div>
   );
@@ -93,35 +100,30 @@ function RailRow({ label, value, dot }) {
   );
 }
 
-function SkillProgressCard({ skills, company = "Stripe" }) {
-  const high = skills.filter(s => s.state === "high").length;
-  const some = skills.filter(s => s.state === "some").length;
-  const low  = skills.filter(s => s.state === "low").length;
-  const pct  = Math.round((high + some * 0.5) / skills.length * 100);
+function SkillProgressCard({ mastered, total, company, categories }) {
+  const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+  const remaining = total - mastered;
   return (
     <div style={RAIL_CARD}>
       <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        Skill progress
+        Topic progress
         <span style={{ fontSize: 11, color: "#9A9A98", fontVariantNumeric: "tabular-nums" }}>{pct}%</span>
       </div>
       <div style={{ fontSize: 11.5, color: "#6B6B6B", marginTop: 6, lineHeight: 1.45 }}>
-        {high} of {skills.length} {company} skills solid
+        {mastered} of {total} {company} topics mastered
       </div>
-      <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 4 }}>
-        {skills.map((s, i) => (
-          <span key={i} title={s.name} style={{
-            flex: 1,
-            height: 22,
-            borderRadius: 4,
-            background: s.state === "high" ? "#D97757" : s.state === "some" ? "#F0D6C7" : "#E8E5DA",
-            border: s.state === "low" ? "1px dashed #C8C5BB" : "0",
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 3 }}>
+        {[...categories].sort((a, b) => (b.mastered ? 1 : 0) - (a.mastered ? 1 : 0)).map((cat, i) => (
+          <span key={i} title={cat.skill_name} style={{
+            flex: 1, height: 22, borderRadius: 4,
+            background: cat.mastered ? "#D97757" : "#E8E5DA",
+            border: cat.mastered ? "0" : "1px dashed #C8C5BB",
           }} />
         ))}
       </div>
-      <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10.5, color: "#9A9A98" }}>
-        <span>{high} solid</span>
-        <span>{some} partial</span>
-        <span>{low} gap</span>
+      <div style={{ marginTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10.5, color: "#9A9A98" }}>
+        <span>{mastered} done</span>
+        <span>{remaining} to go</span>
       </div>
     </div>
   );
@@ -131,7 +133,7 @@ function TodayCard({ items }) {
   return (
     <div style={RAIL_CARD}>
       <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em" }}>Today</div>
-      <div style={{ fontSize: 11.5, color: "#6B6B6B", marginTop: 6, lineHeight: 1.45 }}>Skills to practice now</div>
+      <div style={{ fontSize: 11.5, color: "#6B6B6B", marginTop: 6, lineHeight: 1.45 }}>What you've done · what's next</div>
       <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         {items.map((item) => (
           <RailSkill key={item.name} {...item} />
@@ -291,178 +293,200 @@ function Badge({ style: styleName, text, lookup }) {
 
 
 
-function buildHierarchy(plan) {
-  // Index nodes by skill_id so we can resolve parent relationships
-  const categoryBySkillId = {};  // skill_id → category node
-  const techniqueBySkillId = {}; // skill_id → technique node
-  const categories = [];         // ordered list of top-level category nodes
+// ---------------------------------------------------------------------------
+// Plan timeline — minimal vertical path
+// ---------------------------------------------------------------------------
 
-  // Pass 1: collect categories (preserve sequence_pos order)
-  for (const item of [...plan].sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0))) {
-    if (item.skill_type === "category") {
-      const node = { ...item, techniques: [] };
-      categories.push(node);
-      categoryBySkillId[item.skill_id] = node;
+function PlanTimeline({ plan, sessionId, generating }) {
+  const categories = plan
+    .filter(s => s.skill_type === "category")
+    .sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
+
+  const allTechniques = plan.filter(s => s.skill_type === "technique");
+
+  const techniquesByParent = {};
+  const orphanTechniques = [];
+  for (const t of allTechniques) {
+    if (t.parent_skill_id) {
+      if (!techniquesByParent[t.parent_skill_id]) techniquesByParent[t.parent_skill_id] = [];
+      techniquesByParent[t.parent_skill_id].push(t);
+    } else {
+      orphanTechniques.push(t);
+    }
+  }
+  for (const key of Object.keys(techniquesByParent)) {
+    techniquesByParent[key].sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
+  }
+  orphanTechniques.sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
+
+  // Cap unmastered techniques at 5 — completed ones always shown
+  let unmasteredBudget = 5;
+  const rows = [];
+  for (const cat of categories) {
+    const catTechs = (techniquesByParent[cat.skill_id] || []).filter(t => {
+      if (t.status === "completed") return true;
+      if (unmasteredBudget > 0) { unmasteredBudget--; return true; }
+      return false;
+    });
+    if (catTechs.length > 0) {
+      rows.push({ ...cat, _row: "category" });
+      for (const t of catTechs) rows.push({ ...t, _row: "technique" });
+    }
+  }
+  for (const t of orphanTechniques) {
+    if (t.status === "completed") { rows.push({ ...t, _row: "technique" }); continue; }
+    if (unmasteredBudget > 0) { unmasteredBudget--; rows.push({ ...t, _row: "technique" }); }
+  }
+
+  const catHasRelevant = {};
+  for (const s of plan) {
+    if (s.company_relevant) {
+      if (s.skill_type === "category") catHasRelevant[s.skill_id] = true;
+      else if (s.skill_type === "technique" && s.parent_skill_id) catHasRelevant[s.parent_skill_id] = true;
     }
   }
 
-  // Pass 2: assign techniques to their parent category
-  for (const item of [...plan].sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0))) {
-    if (item.skill_type === "technique") {
-      const node = { ...item, variants: [] };
-      techniqueBySkillId[item.skill_id] = node;
-      const parentCat = item.parent_skill_id ? categoryBySkillId[item.parent_skill_id] : null;
-      if (parentCat) {
-        parentCat.techniques.push(node);
-      } else {
-        // Orphan technique — wrap in a synthetic category
-        const orphan = {
-          skill_name: item.skill_name,
-          status: item.status,
-          session_skill_id: `__orphan_${item.skill_id}`,
-          techniques: [node],
-        };
-        categories.push(orphan);
-      }
-    }
-  }
+  const LINE = "#E5E2D8";
+  const RAIL = 20;
 
-  // Pass 3: assign variants to their parent technique (or category)
-  for (const item of [...plan].sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0))) {
-    if (item.skill_type === "variant") {
-      const parentTech = item.parent_skill_id ? techniqueBySkillId[item.parent_skill_id] : null;
-      if (parentTech) {
-        parentTech.variants.push(item);
-      } else {
-        const parentCat = item.parent_skill_id ? categoryBySkillId[item.parent_skill_id] : null;
-        if (parentCat) {
-          parentCat.techniques.push({ skill_name: item.skill_name, variants: [item] });
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {rows.map((item, idx) => {
+        const isFirst = idx === 0;
+        const isLast  = idx === rows.length - 1;
+
+        if (item._row === "category") {
+          const relevant = !!catHasRelevant[item.skill_id];
+          return (
+            <div key={item.skill_id}>
+              {/* connecting line above (skip for very first item) */}
+              {!isFirst && (
+                <div style={{ display: "flex" }}>
+                  <div style={{ width: RAIL, display: "flex", justifyContent: "center" }}>
+                    <div style={{ width: 1.5, height: 22, background: LINE }} />
+                  </div>
+                </div>
+              )}
+
+              {/* category label — no dot, just text */}
+              <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 2 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: relevant ? "#1A1A1A" : "#6B6B6B",
+                }}>
+                  {item.skill_name}
+                </span>
+                {relevant && (
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 600, letterSpacing: "0.05em",
+                    textTransform: "uppercase", color: "#8B6B55",
+                    background: "#F0EAE4", border: "1px solid #DDD0C6",
+                    borderRadius: 999, padding: "1px 7px", flexShrink: 0,
+                  }}>
+                    company asks
+                  </span>
+                )}
+              </div>
+
+              {/* short line below label, before first technique */}
+              <div style={{ display: "flex" }}>
+                <div style={{ width: RAIL, display: "flex", justifyContent: "center" }}>
+                  <div style={{ width: 1.5, height: 10, background: LINE }} />
+                </div>
+              </div>
+            </div>
+          );
         }
-      }
-    }
-  }
 
-  return categories;
-}
+        /* ── Technique node ── */
+        const dotBorder =
+          item.status === "completed"   ? "#1A7A48" :
+          item.status === "in_progress" ? "#1D6FA4" :
+          item.company_relevant         ? "#9A9A98" : "#C8C5BB";
+        const dotBg =
+          item.status === "completed"   ? "#1A7A48" :
+          item.status === "in_progress" ? "#1D6FA4" : "#FFFFFF";
+        const textColor =
+          item.status === "completed"   ? "#1A7A48" :
+          item.status === "in_progress" ? "#1D6FA4" : "#1A1A1A";
 
-function VariantRow({ variant, sessionId }) {
-  return (
-    <Link
-      to={`/session/${sessionId}/skills/${variant.session_skill_id}`}
-      style={{ textDecoration: "none" }}
-    >
-      <div 
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "12px 16px",
-          borderRadius: 12,
-          transition: "all 0.2s ease",
-          cursor: "pointer",
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = "#F9F8F4";
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = "transparent";
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: variant.status === "completed" ? "#1A7A48" : variant.status === "in_progress" ? "#1D6FA4" : "#D8D6CE"
-          }} />
-          <span style={{ fontSize: 14, fontWeight: 500, color: "#1A1A1A" }}>{variant.skill_name}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {variant.difficulty && (
-            <Badge style={variant.difficulty} text={variant.difficulty} lookup={DIFFICULTY_STYLE} />
+        return (
+          <div key={item.session_skill_id}>
+            <Link
+              to={`/session/${sessionId}/skills/${item.session_skill_id}`}
+              style={{ textDecoration: "none", display: "flex", alignItems: "center" }}
+              onMouseEnter={e => e.currentTarget.querySelector(".tl").style.color = "#D97757"}
+              onMouseLeave={e => e.currentTarget.querySelector(".tl").style.color = textColor}
+            >
+              {/* dot on the rail */}
+              <div style={{ width: RAIL, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{
+                  width: 9, height: 9, borderRadius: "50%",
+                  border: `1.5px solid ${dotBorder}`,
+                  background: dotBg,
+                }} />
+              </div>
+
+              {/* label */}
+              <span className="tl" style={{
+                fontSize: 14, fontWeight: item.company_relevant ? 500 : 400,
+                color: textColor, paddingLeft: 10,
+                transition: "color 0.12s", letterSpacing: "-0.01em",
+              }}>
+                {item.skill_name}
+              </span>
+
+              {item.status === "completed" && (
+                <span style={{ marginLeft: 8, fontSize: 11, color: "#1A7A48", fontWeight: 700 }}>✓</span>
+              )}
+              {item.status === "in_progress" && (
+                <span style={{ marginLeft: 8, fontSize: 10, color: "#1D6FA4", fontWeight: 600 }}>in progress</span>
+              )}
+            </Link>
+
+            {/* connecting line below (skip after last) */}
+            {!isLast && (
+              <div style={{ display: "flex" }}>
+                <div style={{ width: RAIL, display: "flex", justifyContent: "center" }}>
+                  <div style={{ width: 1.5, height: 16, background: LINE }} />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Generating node — trailing entry on the timeline */}
+      {generating && (
+        <div>
+          {rows.length > 0 && (
+            <div style={{ display: "flex" }}>
+              <div style={{ width: RAIL, display: "flex", justifyContent: "center" }}>
+                <div style={{ width: 1.5, height: 22, background: LINE }} />
+              </div>
+            </div>
           )}
-          <span style={{ fontSize: 16, color: "#D8D6CE" }}>›</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function TechniqueSection({ technique, sessionId }) {
-  const isLeaf = technique.variants.length === 0;
-
-  if (isLeaf && technique.session_skill_id) {
-    return (
-      <Link
-        to={`/session/${sessionId}/skills/${technique.session_skill_id}`}
-        style={{ textDecoration: "none" }}
-      >
-        <div 
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 16px",
-            borderRadius: 12,
-            background: "#F9F8F4",
-            border: "1px solid #E5E2D8",
-            transition: "all 0.2s ease",
-            cursor: "pointer",
-            margin: "0 4px"
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "#D97757";
-            e.currentTarget.style.boxShadow = "0 2px 8px rgba(217,119,87,0.05)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "#E5E2D8";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: technique.status === "completed" ? "#1A7A48" : technique.status === "in_progress" ? "#1D6FA4" : "#D8D6CE"
-            }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#1A1A1A" }}>{technique.skill_name}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <Badge style={technique.status} text={technique.status.replace("_", " ")} lookup={STATUS_STYLE} />
-            <span style={{ fontSize: 18, color: "#D97757" }}>→</span>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ width: RAIL, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: "50%",
+                border: "1.5px solid #E0DDD3",
+                borderTopColor: "#D97757",
+                animation: "spin 0.8s linear infinite",
+                flexShrink: 0,
+              }} />
+            </div>
+            <span style={{ paddingLeft: 10, fontSize: 13, color: "#9A9A98", fontStyle: "italic" }}>
+              {rows.length === 0 ? "Building your golden path…" : "finding next skills…"}
+            </span>
           </div>
         </div>
-      </Link>
-    );
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ 
-        padding: "8px 16px",
-        fontSize: 11,
-        fontWeight: 800,
-        color: "#9A9A98",
-        textTransform: "uppercase",
-        letterSpacing: "0.1em",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between"
-      }}>
-        {technique.skill_name}
-        <span style={{ fontWeight: 600, letterSpacing: "normal", textTransform: "none" }}>
-          {technique.variants.length} {technique.variants.length === 1 ? "variant" : "variants"}
-        </span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {technique.variants.map(v => (
-          <VariantRow key={v.session_skill_id} variant={v} sessionId={sessionId} />
-        ))}
-      </div>
+      )}
     </div>
   );
 }
+
 
 function PlanFailedCard({ sessionId, onRetry }) {
   const [retrying, setRetrying] = useState(false);
@@ -491,232 +515,6 @@ function PlanFailedCard({ sessionId, onRetry }) {
         {retrying ? "Retrying…" : "Retry"}
       </button>
     </div>
-  );
-}
-
-function SuggestedSkillsSection({ skills, sessionId, onActivate }) {
-  const [activating, setActivating] = useState(null);
-
-  async function handleActivate(ss) {
-    setActivating(ss.session_skill_id);
-    try {
-      const resp = await apiFetch(
-        `/api/user/sessions/${sessionId}/skills/${ss.session_skill_id}/activate`,
-        { method: "POST" },
-      );
-      if (resp && resp.ok) {
-        const data = await resp.json();
-        onActivate(data.activated || [ss.session_skill_id]);
-      }
-    } finally {
-      setActivating(null);
-    }
-  }
-
-  if (skills.length === 0) return null;
-
-  return (
-    <div
-      style={{
-        background: "#FFFAF7",
-        border: "1px solid #F0D6C7",
-        borderRadius: 24,
-        padding: "24px 28px",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#D97757", flexShrink: 0 }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#D97757", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-          AI Suggestions
-        </span>
-      </div>
-      <p style={{ fontSize: 13, color: "#6B6B6B", margin: "0 0 18px" }}>
-        Based on {skills[0]?.company_name || "this company"}'s interview patterns. Add to your plan to start practicing.
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {skills.map((ss) => (
-          <div
-            key={ss.session_skill_id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              padding: "12px 16px",
-              background: "#FFFFFF",
-              border: "1px solid #F0D6C7",
-              borderRadius: 14,
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>{ss.skill_name}</span>
-                {ss.difficulty && (
-                  <span style={{ fontSize: 11, color: "#9A9A98" }}>{ss.difficulty}</span>
-                )}
-              </div>
-              {ss.suggestion_reason && (
-                <p style={{ fontSize: 12, color: "#8A7060", margin: "4px 0 0", lineHeight: 1.45 }}>
-                  {ss.suggestion_reason}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => handleActivate(ss)}
-              disabled={activating === ss.session_skill_id}
-              style={{
-                padding: "6px 16px",
-                background: activating === ss.session_skill_id ? "#F0D6C7" : "#D97757",
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: activating === ss.session_skill_id ? "not-allowed" : "pointer",
-                fontFamily: "inherit",
-                transition: "background 0.15s",
-                flexShrink: 0,
-              }}
-              onMouseEnter={(e) => { if (!activating) e.currentTarget.style.background = "#C86A47"; }}
-              onMouseLeave={(e) => { if (!activating) e.currentTarget.style.background = "#D97757"; }}
-            >
-              {activating === ss.session_skill_id ? "Adding…" : "Add to plan"}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CategoryAccordion({ category, sessionId }) {
-  const [isExpanded, setIsExpanded] = useState(category.status === "in_progress");
-  
-  const allVariants = category.techniques.flatMap(t => t.variants);
-  const useTechniquesAsUnits = allVariants.length === 0;
-  
-  const completedCount = useTechniquesAsUnits 
-    ? category.techniques.filter(t => t.status === "completed").length
-    : allVariants.filter(v => v.status === "completed").length;
-    
-  const totalCount = useTechniquesAsUnits ? category.techniques.length : allVariants.length;
-
-  return (
-    <article
-      style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E2D8",
-        borderRadius: 24,
-        overflow: "hidden",
-        boxShadow: isExpanded ? "0 8px 16px rgba(0,0,0,0.04)" : "0 1px 4px rgba(0,0,0,0.02)",
-        transition: "all 0.3s ease-in-out",
-        transform: isExpanded ? "translateY(-1px)" : "translateY(0)",
-      }}
-    >
-      <div 
-        onClick={() => setIsExpanded(!isExpanded)}
-        style={{
-          padding: "24px 28px",
-          cursor: "pointer",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16,
-        }}
-        onMouseEnter={e => {
-          if (!isExpanded) {
-            e.currentTarget.parentElement.style.borderColor = "#C8C5BB";
-            e.currentTarget.parentElement.style.boxShadow = "0 4px 12px rgba(0,0,0,0.03)";
-          }
-        }}
-        onMouseLeave={e => {
-          if (!isExpanded) {
-            e.currentTarget.parentElement.style.borderColor = "#E5E2D8";
-            e.currentTarget.parentElement.style.boxShadow = "0 1px 4px rgba(0,0,0,0.02)";
-          }
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-              <h2 style={{
-                fontSize: 20,
-                fontWeight: 900,
-                letterSpacing: "-0.03em",
-                color: "#1A1A1A",
-                margin: 0,
-                fontFamily: "Martel Sans, sans-serif",
-              }}>
-                {category.skill_name}
-              </h2>
-              {category.status && (
-                <Badge style={category.status} text={category.status.replace("_", " ")} lookup={STATUS_STYLE} />
-              )}
-            </div>
-            {category.description && (
-              <p style={{ fontSize: 14, color: "#6B6B6B", margin: 0, lineHeight: 1.5, maxWidth: "90%" }}>
-                {category.description}
-              </p>
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A1A" }}>
-              {completedCount}<span style={{ color: "#D8D6CE", margin: "0 2px" }}>/</span>{totalCount}
-            </div>
-            <span style={{ 
-              fontSize: 24, 
-              color: "#D8D6CE", 
-              transition: "transform 0.3s ease",
-              transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-              lineHeight: 1
-            }}>›</span>
-          </div>
-        </div>
-
-        {/* Technique Tags for collapsed state */}
-        {!isExpanded && category.techniques.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {category.techniques.map(t => (
-              <span 
-                key={t.session_skill_id}
-                style={{
-                  padding: "4px 12px",
-                  background: "#F6F4ED",
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#9A9A98",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em"
-                }}
-              >
-                {t.skill_name}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {isExpanded && (
-        <div style={{ 
-          padding: "0 12px 24px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 20,
-          borderTop: "1px solid #F4F1EA",
-          marginTop: -4,
-          paddingTop: 20
-        }}>
-          {category.techniques.map(t => (
-            <TechniqueSection key={t.session_skill_id} technique={t} sessionId={sessionId} />
-          ))}
-          {category.techniques.length === 0 && (
-            <div style={{ padding: "12px 16px", fontSize: 13, color: "#9A9A98", fontStyle: "italic" }}>
-              No techniques published for this category yet.
-            </div>
-          )}
-        </div>
-      )}
-    </article>
   );
 }
 
@@ -779,22 +577,6 @@ export function SessionPage() {
     return () => clearInterval(interval);
   }, [planStatus, sessionId]);
 
-  // Split plan into active (queued/in_progress/completed) and suggested
-  const activePlan = useMemo(() => plan.filter(s => s.status !== "suggested"), [plan]);
-  const suggestedPlan = useMemo(() => {
-    const suggested = plan.filter(s => s.status === "suggested");
-    // Don't show a category card if any of its child techniques are also suggested
-    const suggestedParentIds = new Set(suggested.map(s => s.parent_skill_id).filter(Boolean));
-    return suggested.filter(s => !(s.skill_type === "category" && suggestedParentIds.has(s.skill_id)));
-  }, [plan]);
-  const hierarchicalPlan = useMemo(() => buildHierarchy(activePlan), [activePlan]);
-
-  function handleSkillActivated(activatedIds) {
-    const ids = new Set(Array.isArray(activatedIds) ? activatedIds : [activatedIds]);
-    setPlan(prev => prev.map(s =>
-      ids.has(s.session_skill_id) ? { ...s, status: "queued" } : s
-    ));
-  }
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -896,163 +678,141 @@ export function SessionPage() {
             {/* Left: header + skill plan */}
             <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
             {/* Page header */}
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ marginTop: 24 }}>
-                  <span style={{ color: "#D97757", fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.25em", marginBottom: 12, display: "block" }}>
-                    Personalized Plan
-                  </span>
-
-                  <h1
-                    style={{
-                      fontSize: "clamp(32px, 5vw, 56px)",
-                      fontWeight: 900,
-                      letterSpacing: "-0.04em",
-                      color: "#1A1A1A",
-                      fontFamily: "Martel Sans, sans-serif",
-                      lineHeight: 1.05,
-                      maxWidth: 800,
-                    }}
-                  >
-                    A strategy built for you to master {session.company_name}
-                  </h1>
-                </div>
-
-                <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-                  {session.timeline_weeks && (
-                    <span style={{ fontSize: 13, color: "#6B6B6B", fontWeight: 500 }}>
-                      {session.timeline_weeks} weeks
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      borderRadius: 999,
-                      padding: "3px 10px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      textTransform: "capitalize",
-                      ...(STATUS_STYLE[session.status] || STATUS_STYLE.queued),
-                    }}
-                  >
-                    {session.status}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
-                <button
-                  type="button"
-                  onClick={isActive ? handleAbandon : handleResume}
-                  disabled={abandoning || resuming || deleting}
-                  style={{
-                    background: "none",
-                    border: "1px solid #E0DDD3",
-                    borderRadius: 999,
-                    padding: "8px 18px",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#1A1A1A",
-                    cursor: (abandoning || resuming || deleting) ? "not-allowed" : "pointer",
-                    fontFamily: "inherit",
-                    opacity: (abandoning || resuming || deleting) ? 0.5 : 1,
-                    transition: "border-color 0.15s",
-                  }}
-                  onMouseEnter={(e) => { if (!abandoning && !resuming) e.currentTarget.style.borderColor = "#9A9A98"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E0DDD3"; }}
-                >
-                  {isActive
-                    ? (abandoning ? "Abandoning…" : "Abandon session")
-                    : (resuming ? "Resuming…" : "Resume session")}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  style={{
-                    background: "none",
-                    border: "1px solid #F0C0C0",
-                    borderRadius: 999,
-                    padding: "8px 18px",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#A82828",
-                    cursor: deleting ? "not-allowed" : "pointer",
-                    fontFamily: "inherit",
-                    opacity: deleting ? 0.5 : 1,
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.background = "#FFF0F0"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
-                  {deleting ? "Deleting…" : "Delete session"}
-                </button>
+            <div style={{ marginTop: 24 }}>
+              <span style={{ color: "#D97757", fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.25em", marginBottom: 12, display: "block" }}>
+                Personalized Plan
+              </span>
+              <h1 style={{
+                fontSize: "clamp(32px, 5vw, 56px)",
+                fontWeight: 900, letterSpacing: "-0.04em", color: "#1A1A1A",
+                fontFamily: "Martel Sans, sans-serif", lineHeight: 1.05, maxWidth: 800, margin: 0,
+              }}>
+                A strategy built for you to master {session.company_name}
+              </h1>
+              <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+                {session.timeline_weeks && (
+                  <span style={{ fontSize: 13, color: "#6B6B6B", fontWeight: 500 }}>{session.timeline_weeks} weeks</span>
+                )}
+                <span style={{
+                  display: "inline-flex", borderRadius: 999, padding: "3px 10px",
+                  fontSize: 11, fontWeight: 600, textTransform: "capitalize",
+                  ...(STATUS_STYLE[session.status] || STATUS_STYLE.queued),
+                }}>
+                  {session.status}
+                </span>
               </div>
             </div>
 
-            {/* Hierarchical Skill plan */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {hierarchicalPlan.map((category) => (
-                <CategoryAccordion
-                  key={category.session_skill_id}
-                  category={category}
-                  sessionId={sessionId}
-                />
-              ))}
+            {/* Plan timeline */}
+            {(plan.filter(s => s.skill_type !== "variant").length > 0 || planStatus === "generating") && (
+              <PlanTimeline plan={plan} sessionId={sessionId} generating={planStatus === "generating"} />
+            )}
 
-              {/* AI Suggestions */}
-              <SuggestedSkillsSection
-                skills={suggestedPlan}
-                sessionId={sessionId}
-                onActivate={handleSkillActivated}
-              />
+            {/* Failed state */}
+            {planStatus === "failed" && <PlanFailedCard sessionId={sessionId} onRetry={() => setPlanStatus("generating")} />}
 
-              {/* Generating state */}
-              {planStatus === "generating" && (
-                <div style={{ background: "#FFFAF7", border: "1px dashed #F0D6C7", borderRadius: 24, padding: "28px 24px", display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid #F0D6C7", borderTopColor: "#D97757", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: "#D97757", margin: 0 }}>Building your plan…</p>
-                    <p style={{ fontSize: 12, color: "#9A9A98", margin: "4px 0 0" }}>AI is analysing {session.company_name}'s interview patterns for you.</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Failed state */}
-              {planStatus === "failed" && <PlanFailedCard sessionId={sessionId} onRetry={() => setPlanStatus("generating")} />}
-
-              {/* Empty state (plan ready, no skills at all) */}
-              {planStatus === "ready" && hierarchicalPlan.length === 0 && suggestedPlan.length === 0 && (
-                <div style={{ background: "#FFFFFF", border: "1px solid #E5E2D8", borderRadius: 24, padding: "48px 24px", textAlign: "center", boxShadow: "0 1px 4px rgba(0,0,0,0.02)" }}>
-                  <p style={{ fontSize: 15, fontWeight: 500, color: "#9A9A98", margin: 0 }}>No skills in this plan yet.</p>
-                  <p style={{ fontSize: 13, color: "#D8D6CE", marginTop: 8 }}>We're mapping {session.company_name}'s patterns — check back shortly.</p>
-                </div>
-              )}
-            </div>
+            {/* Empty state — no skills yet and not generating */}
+            {planStatus === "ready" && plan.filter(s => s.skill_type !== "variant").length === 0 && (
+              <div style={{ padding: "40px 0" }}>
+                <p style={{ fontSize: 14, color: "#9A9A98", margin: 0 }}>No skills in this plan yet.</p>
+                <p style={{ fontSize: 12, color: "#C8C5BB", marginTop: 6 }}>We're mapping {session.company_name}'s patterns — check back shortly.</p>
+              </div>
+            )}
 
             </div>{/* end left col */}
 
             {/* Right: stats sidebar */}
             {(() => {
-              const skillBars = capabilities.map(s => ({ name: s.skill_name, state: confidenceToState(s.confidence) }));
-              const todayItems = todayFromSkills(capabilities);
-              const highCount = skillBars.filter(s => s.state === "high").length;
-              const capPct = skillBars.length ? Math.round((highCount / skillBars.length) * 100) : 0;
-              const firstGap = capabilities.find(s => s.confidence !== "high");
+              // Category-level progress from the plan
+              const planCategories = plan.filter(s => s.skill_type === "category");
+              const planTechniques = plan.filter(s => s.skill_type === "technique");
+              const techsByCategory = {};
+              for (const t of planTechniques) {
+                if (t.parent_skill_id) {
+                  if (!techsByCategory[t.parent_skill_id]) techsByCategory[t.parent_skill_id] = [];
+                  techsByCategory[t.parent_skill_id].push(t);
+                }
+              }
+              const categoryStats = planCategories
+                .map(cat => {
+                  const techs = techsByCategory[cat.skill_id] || [];
+                  return { ...cat, mastered: techs.length > 0 && techs.every(t => t.status === "completed"), techCount: techs.length };
+                })
+                .filter(c => c.techCount > 0);
+              const masteredCats = categoryStats.filter(c => c.mastered).length;
+              const totalCats = categoryStats.length;
+
+              // Next unmastered technique (first in sequence order)
+              const nextTech = planTechniques
+                .filter(t => t.status !== "completed")
+                .sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0))[0];
+
+              // Today: completed techniques (crossed off) + next 3 unmastered
+              const completedTechs = planTechniques
+                .filter(t => t.status === "completed")
+                .sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
+              const unmasteredTechs = planTechniques
+                .filter(t => t.status !== "completed")
+                .sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0))
+                .slice(0, 3);
+              const todayItems = [
+                ...completedTechs.map(t => ({ name: t.skill_name, detail: "", priority: "done", current: false })),
+                ...unmasteredTechs.map((t, i) => ({
+                  name: t.skill_name,
+                  detail: t.difficulty || "",
+                  priority: t.company_relevant ? "high" : "med",
+                  current: i === 0,
+                })),
+              ];
+
+              // Claude card text: use AI's suggestion_reason for the next skill
+              const claudeText = nextTech
+                ? (nextTech.suggestion_reason || `Focus on ${nextTech.skill_name} next — it's your most direct path through ${session.company_name}'s interview loop.`)
+                : null;
+
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "sticky", top: 72 }}>
                   <CompanyLinkCard companyName={session.company_name} companyId={session.company_id} />
-                  {skillBars.length > 0 && (
-                    <SkillProgressCard skills={skillBars} company={session.company_name} />
-                  )}
-                  {todayItems.length > 0 && (
-                    <TodayCard items={todayItems} />
-                  )}
-                  <CoverageCard pct={capPct} company={session.company_name} />
+                  {claudeText && <FromClaudeCard text={claudeText} />}
+                  {totalCats > 0 && <SkillProgressCard mastered={masteredCats} total={totalCats} company={session.company_name} categories={categoryStats} />}
+                  {todayItems.length > 0 && <TodayCard items={todayItems} />}
                   <CapabilitiesCard capabilities={capabilities} />
-                  {firstGap && (
-                    <FromClaudeCard text={`Focus on ${firstGap.skill_name} first — it's your biggest gap for ${session.company_name}.`} />
-                  )}
+
+                  {/* Session actions at the bottom */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 6 }}>
+                    <button
+                      type="button"
+                      onClick={isActive ? handleAbandon : handleResume}
+                      disabled={abandoning || resuming || deleting}
+                      style={{
+                        background: "none", border: "1px solid #E0DDD3", borderRadius: 999,
+                        padding: "8px 18px", fontSize: 13, fontWeight: 500, color: "#6B6B6B",
+                        cursor: (abandoning || resuming || deleting) ? "not-allowed" : "pointer",
+                        fontFamily: "inherit", opacity: (abandoning || resuming || deleting) ? 0.5 : 1,
+                        transition: "border-color 0.15s, color 0.15s", width: "100%",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "#9A9A98"; e.currentTarget.style.color = "#1A1A1A"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "#E0DDD3"; e.currentTarget.style.color = "#6B6B6B"; }}
+                    >
+                      {isActive ? (abandoning ? "Abandoning…" : "Abandon session") : (resuming ? "Resuming…" : "Resume session")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      style={{
+                        background: "none", border: "none", borderRadius: 999,
+                        padding: "6px 18px", fontSize: 12, fontWeight: 500, color: "#C8A8A0",
+                        cursor: deleting ? "not-allowed" : "pointer",
+                        fontFamily: "inherit", opacity: deleting ? 0.5 : 1,
+                        transition: "color 0.15s", width: "100%",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "#A82828"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "#C8A8A0"; }}
+                    >
+                      {deleting ? "Deleting…" : "Delete session"}
+                    </button>
+                  </div>
                 </div>
               );
             })()}

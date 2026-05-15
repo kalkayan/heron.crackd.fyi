@@ -303,6 +303,7 @@ function PlanTimeline({ plan, sessionId, generating }) {
     .sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
 
   const allTechniques = plan.filter(s => s.skill_type === "technique");
+  const allVariants   = plan.filter(s => s.skill_type === "variant");
 
   const techniquesByParent = {};
   const orphanTechniques = [];
@@ -319,9 +320,28 @@ function PlanTimeline({ plan, sessionId, generating }) {
   }
   orphanTechniques.sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
 
+  const variantsByParent = {};
+  for (const v of allVariants) {
+    if (v.parent_skill_id) {
+      if (!variantsByParent[v.parent_skill_id]) variantsByParent[v.parent_skill_id] = [];
+      variantsByParent[v.parent_skill_id].push(v);
+    }
+  }
+  for (const key of Object.keys(variantsByParent)) {
+    variantsByParent[key].sort((a, b) => (a.sequence_pos ?? 0) - (b.sequence_pos ?? 0));
+  }
+
   // Cap unmastered techniques at 5 — completed ones always shown
   let unmasteredBudget = 5;
   const rows = [];
+
+  const pushTechWithVariants = (t) => {
+    rows.push({ ...t, _row: "technique" });
+    for (const v of (variantsByParent[t.skill_id] || [])) {
+      rows.push({ ...v, _row: "variant" });
+    }
+  };
+
   for (const cat of categories) {
     const catTechs = (techniquesByParent[cat.skill_id] || []).filter(t => {
       if (t.status === "completed") return true;
@@ -330,12 +350,12 @@ function PlanTimeline({ plan, sessionId, generating }) {
     });
     if (catTechs.length > 0) {
       rows.push({ ...cat, _row: "category" });
-      for (const t of catTechs) rows.push({ ...t, _row: "technique" });
+      for (const t of catTechs) pushTechWithVariants(t);
     }
   }
   for (const t of orphanTechniques) {
-    if (t.status === "completed") { rows.push({ ...t, _row: "technique" }); continue; }
-    if (unmasteredBudget > 0) { unmasteredBudget--; rows.push({ ...t, _row: "technique" }); }
+    if (t.status === "completed") { pushTechWithVariants(t); continue; }
+    if (unmasteredBudget > 0) { unmasteredBudget--; pushTechWithVariants(t); }
   }
 
   const catHasRelevant = {};
@@ -395,6 +415,44 @@ function PlanTimeline({ plan, sessionId, generating }) {
                   <div style={{ width: 1.5, height: 10, background: LINE }} />
                 </div>
               </div>
+            </div>
+          );
+        }
+
+        /* ── Variant node ── */
+        if (item._row === "variant") {
+          const vColor =
+            item.status === "completed"   ? "#1A7A48" :
+            item.status === "in_progress" ? "#1D6FA4" : "#9A9A98";
+          return (
+            <div key={item.session_skill_id}>
+              <Link
+                to={`/session/${sessionId}/skills/${item.session_skill_id}`}
+                style={{ textDecoration: "none", display: "flex", alignItems: "center" }}
+                onMouseEnter={e => e.currentTarget.querySelector(".vl").style.color = "#D97757"}
+                onMouseLeave={e => e.currentTarget.querySelector(".vl").style.color = vColor}
+              >
+                {/* indented rail — aligns dot under technique label */}
+                <div style={{ width: RAIL + 14, display: "flex", justifyContent: "flex-end", flexShrink: 0, paddingRight: 4 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", border: `1.5px solid ${vColor}`, background: "#FFFFFF" }} />
+                </div>
+                <span className="vl" style={{
+                  fontSize: 13, fontWeight: 400, color: vColor,
+                  paddingLeft: 10, transition: "color 0.12s", letterSpacing: "-0.01em",
+                }}>
+                  {item.skill_name}
+                </span>
+                {item.status === "completed" && (
+                  <span style={{ marginLeft: 8, fontSize: 11, color: "#1A7A48", fontWeight: 700 }}>✓</span>
+                )}
+              </Link>
+              {!isLast && (
+                <div style={{ display: "flex" }}>
+                  <div style={{ width: RAIL + 14, display: "flex", justifyContent: "flex-end", paddingRight: 7 }}>
+                    <div style={{ width: 1.5, height: 12, background: LINE }} />
+                  </div>
+                </div>
+              )}
             </div>
           );
         }
@@ -704,7 +762,7 @@ export function SessionPage() {
             </div>
 
             {/* Plan timeline */}
-            {(plan.filter(s => s.skill_type !== "variant").length > 0 || planStatus === "generating") && (
+            {(plan.filter(s => s.skill_type === "category" || s.skill_type === "technique").length > 0 || planStatus === "generating") && (
               <PlanTimeline plan={plan} sessionId={sessionId} generating={planStatus === "generating"} />
             )}
 
@@ -712,7 +770,7 @@ export function SessionPage() {
             {planStatus === "failed" && <PlanFailedCard sessionId={sessionId} onRetry={() => setPlanStatus("generating")} />}
 
             {/* Empty state — no skills yet and not generating */}
-            {planStatus === "ready" && plan.filter(s => s.skill_type !== "variant").length === 0 && (
+            {planStatus === "ready" && plan.filter(s => s.skill_type === "category" || s.skill_type === "technique").length === 0 && (
               <div style={{ padding: "40px 0" }}>
                 <p style={{ fontSize: 14, color: "#9A9A98", margin: 0 }}>No skills in this plan yet.</p>
                 <p style={{ fontSize: 12, color: "#C8C5BB", marginTop: 6 }}>We're mapping {session.company_name}'s patterns — check back shortly.</p>

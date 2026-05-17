@@ -103,6 +103,10 @@ export function LoginPage() {
       });
       const data = await resp.json();
       if (!resp.ok) {
+        if (resp.status === 403 && data.error === "waitlist") {
+          setStep("waitlist");
+          return;
+        }
         setError(data.error || "Invalid code.");
         return;
       }
@@ -166,16 +170,56 @@ export function LoginPage() {
                   fontFamily: "Martel Sans, sans-serif",
                 }}
               >
-                {step === 1 ? "Sign in to crackd.fyi" : "Check your inbox"}
+                {step === "waitlist"
+                  ? "You're on the list"
+                  : step === 1
+                  ? "Sign in to crackd.fyi"
+                  : "Check your inbox"}
               </h1>
               <p style={{ marginTop: 8, fontSize: 14, color: "#6B6B6B", lineHeight: 1.5 }}>
-                {step === 1
+                {step === "waitlist"
+                  ? "crackd.fyi is in early access. We'll email you when your spot is ready."
+                  : step === 1
                   ? "Enter your email and we'll send you a 6-digit code."
                   : `We sent a code to ${email}. Paste it below.`}
               </p>
             </div>
 
-            {step === 1 ? (
+            {step === "waitlist" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{
+                  background: "#F9F7F3",
+                  border: "1px solid #E5E2D8",
+                  borderRadius: 12,
+                  padding: "16px 18px",
+                  fontSize: 13,
+                  color: "#6B6B6B",
+                  lineHeight: 1.6,
+                }}>
+                  <strong style={{ color: "#1A1A1A", display: "block", marginBottom: 4 }}>
+                    We've got your email ✓
+                  </strong>
+                  We're rolling out access gradually to keep quality high. You'll hear from us at{" "}
+                  <span style={{ color: "#1A1A1A", fontWeight: 600 }}>{email}</span> when you're in.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setStep(1); setCode(""); setError(""); }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    fontSize: 13,
+                    color: "#6B6B6B",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    textAlign: "center",
+                  }}
+                >
+                  ← Try a different email
+                </button>
+              </div>
+            ) : step === 1 ? (
               <form onSubmit={handleRequestOtp} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
                   <label

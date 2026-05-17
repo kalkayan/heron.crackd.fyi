@@ -38,6 +38,83 @@ function Section({ title, subheading, children, className = "" }) {
   );
 }
 
+function Sparkline({ data }) {
+  if (!data || data.length === 0) return null;
+  const max = Math.max(...data.map(d => d.count), 1);
+  const width = 100;
+  const height = 40;
+  const padding = 1;
+  
+  const points = data.map((d, i) => {
+    const x = (i / (data.length - 1 || 1)) * (width - 2 * padding) + padding;
+    const y = height - ((d.count / max) * (height - 2 * padding) + padding);
+    return { x, y, str: `${x},${y}`, count: d.count };
+  });
+
+  const pathData = points.map(p => p.str).join(" ");
+  const areaPath = data.length > 1 
+    ? `M ${points[0].x} ${height} L ${pathData} L ${points[points.length-1].x} ${height} Z`
+    : "";
+
+  return (
+    <div className="flex gap-4 items-start">
+      {/* Y-Axis */}
+      <div className="flex flex-col justify-between text-[9px] font-black text-[#9A9A98] tabular-nums h-[120px] py-1 border-r border-[#E5E2D8] pr-3 shrink-0">
+        <span>{max}</span>
+        <span className="opacity-30">{Math.round(max / 2)}</span>
+        <span>0</span>
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="h-[120px] w-full relative mb-4">
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sparkline-gradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#D97757" stopOpacity="0.15" />
+                <stop offset="100%" stopColor="#D97757" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {areaPath && (
+              <path
+                d={areaPath}
+                fill="url(#sparkline-gradient)"
+              />
+            )}
+            
+            {/* Horizontal guide lines */}
+            <line x1="0" y1={height/2} x2={width} y2={height/2} stroke="#E5E2D8" strokeWidth="0.5" strokeDasharray="2,2" />
+            
+            <polyline
+              fill="none"
+              stroke="#D97757"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              points={pathData}
+            />
+            {points.map((p, i) => (
+              <circle
+                key={i}
+                cx={p.x}
+                cy={p.y}
+                r="3"
+                fill="#D97757"
+                className="opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                <title>{data[i].label} {data[i].year}: {data[i].count} reports</title>
+              </circle>
+            ))}
+          </svg>
+        </div>
+        <div className="flex justify-between text-[9px] font-black text-[#9A9A98] uppercase tracking-wider border-t border-[#F4F1EA] pt-2">
+          <span>{data[0]?.label} {data[0]?.year}</span>
+          <span>{data[data.length - 1]?.label} {data[data.length - 1]?.year}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FilterChip({ active, onClick, children }) {
   return (
     <button
@@ -54,7 +131,6 @@ function FilterChip({ active, onClick, children }) {
     </button>
   );
 }
-
 function StatColumn({ title, items, color, formatValue }) {
   return (
     <div>
@@ -572,6 +648,59 @@ export function CompanyPage() {
       body: `The ${mainGatekeeper.name} represents the primary filter where ${mainGatekeeper.failureRate}% of tracked candidates lose momentum.`
     } : null;
 
+    // --- Sources Intelligence ---
+    const sourceCounts = {};
+    const normalizeSource = (s) => {
+      if (!s) return "Internet";
+      const lower = s.toLowerCase();
+      if (lower.includes("glassdoor")) return "Glassdoor";
+      if (lower.includes("blind")) return "Blind";
+      if (lower.includes("leetcode")) return "LeetCode";
+      return "Internet";
+    };
+
+    reports.forEach(r => {
+      const src = normalizeSource(r.source_type);
+      sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+    });
+    
+    const sourceBreakdown = Object.entries(sourceCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Date distribution for the last 24 months
+    const now = new Date();
+    const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth() + 1, 1);
+    const monthCounts = {};
+    datedReports.forEach(({ d }) => {
+      if (d >= twoYearsAgo) {
+        const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+        monthCounts[key] = (monthCounts[key] || 0) + 1;
+      }
+    });
+
+    const dateDistribution = [];
+    let curr = new Date(twoYearsAgo);
+    while (curr <= now) {
+      const key = `${curr.getFullYear()}-${curr.getMonth() + 1}`;
+      dateDistribution.push({ 
+        label: curr.toLocaleString("en-US", { month: "short" }),
+        year: curr.getFullYear(),
+        count: monthCounts[key] || 0 
+      });
+      curr.setMonth(curr.getMonth() + 1);
+    }
+
+    const topReportsWithLinks = reports
+      .filter(r => r.source_url && r.quality === "outstanding")
+      .sort((a, b) => {
+        const da = parseReportDate(a.interview_date) || new Date(0);
+        const db = parseReportDate(b.interview_date) || new Date(0);
+        return db - da;
+      })
+      .slice(0, 5);
+    console.log(topReportsWithLinks)
+
     return {
       reportsAnalyzed: reports.length,
       isEmerging,
@@ -603,6 +732,9 @@ export function CompanyPage() {
       hintCulture,
       struggleHotspots,
       eliminationByRound,
+      sourceBreakdown,
+      dateDistribution,
+      topReportsWithLinks,
     };
   }, [reports, rounds, company, questions]);
 
@@ -820,7 +952,7 @@ export function CompanyPage() {
                             return (
                               <span
                                 key={name}
-                                className="text-[11px] font-bold px-3 py-1.5 rounded-full transition-transform hover:-translate-y-0.5"
+                                className="text-[10.5px] font-bold px-2 py-1 rounded-full transition-transform hover:-translate-y-0.5"
                                 style={{
                                   background: c.bg,
                                   border: `1px solid ${c.border}`,
@@ -1396,45 +1528,81 @@ export function CompanyPage() {
             </div>
           </div>
         </Section>
-        {/* --- DATA INTEGRITY --- */}
+        {/* --- SOURCES --- */}
         <Section 
-          title="Intelligence strength" 
-          subheading="Patterns are strongest for mid-level SWE; senior and staff-level signals are still emerging."
+          title="Sources" 
+          subheading="Transparency builds trust. Here is the breakdown of where this intelligence comes from."
         >
-          <div className="grid grid-cols-2 gap-8">
-            <div className={CARD_CLASS}>
-              <h3 className="text-sm font-bold text-[#1A1A1A] mb-6">Coverage & freshness</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-[13px] py-2 border-b border-[#F4F1EA]">
-                  <span className="text-[#6B6B6B] font-medium">Mapped reports</span>
-                  <span className="font-black text-[#1A1A1A]">{stats?.reportsAnalyzed}</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] py-2 border-b border-[#F4F1EA]">
-                  <span className="text-[#6B6B6B] font-medium">Loop maturity</span>
-                  <span className="font-black text-[#1A1A1A]">{stats?.isEmerging ? 'Emerging' : 'Stable'}</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] py-2">
-                  <span className="text-[#6B6B6B] font-medium">Recentness weighting</span>
-                  <span className="text-[#1A7A48] font-black uppercase tracking-widest text-[11px]">Active</span>
-                </div>
+          <div className="grid grid-cols-12 gap-8">
+            <div className={`${CARD_CLASS} col-span-4`}>
+              <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Distribution by source</h3>
+              <div className="space-y-8">
+                {stats?.sourceBreakdown.map((s) => (
+                  <div key={s.name} className="flex flex-col gap-3">
+                    <div className="flex items-end justify-between">
+                      <span className="text-[13px] font-black text-[#1A1A1A] uppercase tracking-wider truncate">
+                        {s.name}
+                      </span>
+                      <span className="text-[20px] font-black text-[#1A1A1A] tabular-nums leading-none">
+                        {Math.round((s.count / stats.reportsAnalyzed) * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-[#FAF6EE] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-[#D97757] rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${(s.count / stats.reportsAnalyzed) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                {stats?.sourceBreakdown.length === 0 && (
+                  <p className="text-xs text-[#9A9A98] italic">No source data yet.</p>
+                )}
               </div>
+              {/* Source distribution footer */}
+              <p className="mt-6 text-[11px] text-[#9A9A98] font-medium italic leading-relaxed">
+                Relative share of reports across major intelligence platforms.
+              </p>
             </div>
 
-            <div className={CARD_CLASS}>
-              <h3 className="text-sm font-bold text-[#1A1A1A] mb-6">Signal Sources</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-[13px] py-2 border-b border-[#F4F1EA]">
-                  <span className="text-[#6B6B6B] font-medium">Source verification</span>
-                  <span className="font-black text-[#1A1A1A]">Cross-referenced</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] py-2 border-b border-[#F4F1EA]">
-                  <span className="text-[#6B6B6B] font-medium">Role depth</span>
-                  <span className="font-black text-[#A86B1A]">Generalist SWE focus</span>
-                </div>
-                <div className="flex justify-between items-center text-[13px] py-2">
-                  <span className="text-[#6B6B6B] font-medium">Dossier status</span>
-                  <span className="font-black uppercase tracking-widest text-[11px] text-[#9A9A98]">Updating...</span>
-                </div>
+            <div className={`${CARD_CLASS} col-span-4`}>
+              <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Reports over time</h3>
+              <Sparkline data={stats?.dateDistribution} />
+              {/* Reports trend footer */}
+              <p className="mt-6 text-[11px] text-[#9A9A98] font-medium italic leading-relaxed">
+                We scout new interview experiences continously.
+              </p>
+            </div>
+
+            <div className={`${CARD_CLASS} col-span-4`}>
+              <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Top verified reports</h3>
+              <div className="space-y-3">
+                {stats?.topReportsWithLinks.map((r, i) => (
+                  <div key={i} className="flex flex-col gap-1 border-b border-[#F4F1EA] last:border-0 pb-3 last:pb-0">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-black text-[#1A1A1A] truncate capitalize">
+                          {r.role || "Technical"}
+                        </span>
+                        <span className="text-[9px] font-bold text-[#D97757] uppercase tracking-tighter shrink-0">
+                          {r.source_type || "Internet"}
+                        </span>
+                      </div>
+                      <a
+                        href={r.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#D97757] font-black text-[13px] hover:scale-110 transition-transform"
+                        title="View Source"
+                      >
+                        ↗
+                      </a>
+                    </div>
+                  </div>
+                ))}
+                {stats?.topReportsWithLinks.length === 0 && (
+                  <p className="text-xs text-[#9A9A98] italic">No direct source links available.</p>
+                )}
               </div>
             </div>
           </div>

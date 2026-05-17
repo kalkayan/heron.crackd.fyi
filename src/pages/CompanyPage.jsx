@@ -467,9 +467,13 @@ export function CompanyPage() {
     const mainGatekeeper = stages.reduce((prev, current) => (prev.failureRate > current.failureRate) ? prev : current, stages[0]);
 
     // Topic & Patterns
-    const topicEmphasis = (company?.topic_tags || []).slice(0, 5).map(t => ({
+    const topicEmphasis = [...(company?.topic_tags || [])]
+      .sort((a, b) => (b.raw_mention_count || 0) - (a.raw_mention_count || 0))
+      .slice(0, 10)
+      .map(t => ({
       name: t.topic_id,
-      score: t.frequency_score,
+      score: t.raw_mention_count || t.frequency_score || 0,
+      count: t.raw_mention_count ? Math.round(t.raw_mention_count) : null,
       interpretation: t.topic_id.toLowerCase().includes('graph') ? 'High recurrence in early screens.' : 
                       t.topic_id.toLowerCase().includes('design') ? 'Primary filter for L5+ candidates.' :
                       t.topic_id.toLowerCase().includes('behavioral') ? 'Values leadership principles late-stage.' : 'Standard technical assessment.'
@@ -628,8 +632,50 @@ export function CompanyPage() {
       { label: "Controlled", value: pct(diffCounts.easy, diffCounts.total) || 15, color: "#1A7A48" },
     ];
 
-    // Success Snapshot
+    // Who gets in
     const offerReports = reports.filter(r => r.outcome === 'offer');
+    
+    const whoGetsIn = (() => {
+      if (offerReports.length === 0) return null;
+      const levelCounts = {};
+      let undisclosedCount = 0;
+      offerReports.forEach(r => {
+        const lv = (r.level || '').trim();
+        if (lv) levelCounts[lv] = (levelCounts[lv] || 0) + 1;
+        else undisclosedCount++;
+      });
+      const levelBars = [
+        ...Object.entries(levelCounts).sort((a, b) => b[1] - a[1]).map(([lv, count]) => ({
+          label: lv.charAt(0).toUpperCase() + lv.slice(1),
+          count,
+          pct: Math.round((count / offerReports.length) * 100),
+          undisclosed: false,
+        })),
+        ...(undisclosedCount > 0 ? [{
+          label: "Not disclosed",
+          count: undisclosedCount,
+          pct: Math.round((undisclosedCount / offerReports.length) * 100),
+          undisclosed: true,
+        }] : []),
+      ];
+      const companyCounts = {};
+      offerReports.forEach(r => {
+        const co = (r.current_company || '').trim();
+        if (co) companyCounts[co] = (companyCounts[co] || 0) + 1;
+      });
+      const fromCompanies = Object.entries(companyCounts).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count }));
+      const yoeVals = offerReports.map(r => r.years_of_exp).filter(y => y != null && !isNaN(y));
+      const yoeBand = yoeVals.length >= 1 ? {
+        min: Math.min(...yoeVals),
+        max: Math.max(...yoeVals),
+        median: [...yoeVals].sort((a, b) => a - b)[Math.floor(yoeVals.length / 2)],
+        n: yoeVals.length,
+      } : null;
+      return { n: offerReports.length, levelBars, fromCompanies, yoeBand };
+    })();
+    
+
+    // Success Snapshot
     const successInsights = offerReports.length > 0 ? [
       `High consistency across ${Math.round(rounds.length / reports.length)} rounds of evaluation.`,
       `Successful navigation of ${mainGatekeeper?.name || 'technical'} filters.`,
@@ -699,7 +745,6 @@ export function CompanyPage() {
         return db - da;
       })
       .slice(0, 5);
-    console.log(topReportsWithLinks)
 
     return {
       reportsAnalyzed: reports.length,
@@ -735,6 +780,7 @@ export function CompanyPage() {
       sourceBreakdown,
       dateDistribution,
       topReportsWithLinks,
+      whoGetsIn,
     };
   }, [reports, rounds, company, questions]);
 
@@ -1107,172 +1153,230 @@ export function CompanyPage() {
         {/* --- WHAT THEY ACTUALLY ASK --- */}
         <Section
           title="What they actually ask"
-          subheading={`${stats?.totalQuestions || 0} questions analyzed. Real samples, recurring patterns, and the styles ${company.name} favors.`}
+          subheading={`${stats?.totalQuestions || 0} questions on record across all rounds.`}
         >
-          <div className={CARD_CLASS}>
-            {/* Top — four stat columns, color-distinct bars */}
-            <div className="grid grid-cols-4 gap-10">
-              <StatColumn
-                title="Most emphasized"
-                color="#C25C3D"
-                items={(stats?.topicEmphasis || []).slice(0, 5).map(t => ({
-                  name: t.name, barValue: Math.round(t.score * 100), score: t.score,
-                }))}
-                formatValue={it => `${it.barValue}%`}
-              />
-              <StatColumn
-                title="Recently trending (last 6 mo)"
-                color="#1A7A48"
-                items={(stats?.trendingTopics || []).map(t => ({
-                  name: t.name, barValue: Math.round(t.score * 100), count: t.count,
-                }))}
-                formatValue={it => `×${it.count}`}
-              />
-              <StatColumn
-                title="Question style"
-                color="#A86B1A"
-                items={(stats?.styleMix || []).map(s => ({
-                  name: s.name, barValue: s.pct,
-                }))}
-                formatValue={it => `${it.barValue}%`}
-              />
-              <StatColumn
-                title="Recurring patterns"
-                color="#6B5A3A"
-                items={(stats?.patternBars || []).map(p => ({
-                  name: p.name, barValue: p.pct, count: p.count,
-                }))}
-                formatValue={it => `×${it.count}`}
-              />
+          {/* Top row: treemap + pattern intelligence */}
+          <div className="grid grid-cols-3 gap-8 mb-8">
+            {/* Most asked treemap */}
+            {(stats?.topicEmphasis || []).length > 0 && (() => {
+              const boxes = squarifyTreemap(
+                stats.topicEmphasis.map(t => ({ ...t, weight: t.score || 0.1 })),
+                100, 100
+              );
+              const ranked = [...boxes].sort((a, b) => b.score - a.score);
+              const rankMap = Object.fromEntries(ranked.map((b, i) => [b.name, i]));
+              const opacityScale = [1, 0.95, 0.9, 0.85, 1, 0.92, 0.85, 1, 0.9, 0.82];
+              const maxScore = Math.max(...stats.topicEmphasis.map(t => t.score), 0.01);
+              return (
+                <div className={CARD_CLASS}>
+                  <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-4">Most asked</p>
+                  <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#FAF6EE] group/treemap">
+                    {boxes.map(b => {
+                      const rank = rankMap[b.name] ?? 9;
+                      const op = opacityScale[rank] ?? 0.82;
+                      let bg, textColor = "white";
+                      if (rank < 4) { bg = `rgba(26,122,72,${op})`; }
+                      else if (rank < 7) { bg = `rgba(90,138,42,${op})`; }
+                      else { bg = `rgba(212,184,0,${op})`; textColor = "#1A1A1A"; }
+                      const isLarge = b.w >= 25 && b.h >= 25;
+                      const isMed = b.w >= 10 && b.h >= 10;
+                      const pct = Math.round((b.score / maxScore) * 100);
+                      const tooltip = [b.name, b.count ? `${Math.round(b.count)} mentions` : null, `${pct}% relative`].filter(Boolean).join(' · ');
+                      return (
+                        <div key={b.name} className="absolute flex flex-col justify-between p-1.5 cursor-default group/cell"
+                          style={{
+                            left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: `${b.h}%`,
+                            background: bg, color: textColor,
+                            borderRight: "1.5px solid #FAF6EE", borderBottom: "1.5px solid #FAF6EE",
+                          }}>
+                          {isMed && <span className="font-bold leading-tight capitalize truncate" style={{ fontSize: isLarge ? 11 : 9 }}>{b.name}</span>}
+                          {isLarge && b.count && <span className="font-black tabular-nums text-[13px]">×{b.count}</span>}
+                          {/* Tooltip */}
+                          <div className="absolute bottom-[calc(100%+4px)] left-1/2 -translate-x-1/2 z-10 pointer-events-none opacity-0 group-hover/cell:opacity-100 transition-opacity duration-100 whitespace-nowrap">
+                            <div className="bg-[#1A1A1A] text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shadow-lg">
+                              {tooltip}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Pattern intelligence */}
+            <div className={`${CARD_CLASS} flex flex-col gap-8`}>
+              {(stats?.trendingTopics || []).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-4">Trending last 6 mo</p>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.trendingTopics.map(t => (
+                      <span key={t.name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border bg-[#EDFBF3] border-[#B6EDD0] text-[#1A7A48]">
+                        <span className="text-[9px]">↑</span>{t.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(stats?.patternBars || []).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-4">Recurring patterns</p>
+                  <div className="flex flex-wrap gap-2">
+                    {stats.patternBars.map(p => (
+                      <span key={p.name} className="px-2.5 py-1 rounded-full text-[11px] font-bold border bg-[#FAF8F4] border-[#E5E2D8] text-[#6B5A3A]">
+                        {p.name} <span className="text-[#D97757] font-black">×{p.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[10px] text-[#B0ADA4] leading-relaxed">Structural question types that appear repeatedly — follow-up probes, edge case pushes, system constraints. The count reflects how often candidates flag them.</p>
+                </div>
+              )}
             </div>
 
-            {/* Divider */}
-            <div className="my-10 border-t border-[#F4F1EA]" />
+            {/* Question style panel */}
+            <div className={`${CARD_CLASS} flex flex-col`}>
+              {(stats?.styleMix || []).length > 0 && (
+                <div className="flex flex-col flex-1">
+                  <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-4">Question style</p>
+                  <div className="flex w-full rounded-lg overflow-hidden h-[10px] bg-[#F4F1EA]">
+                    {stats.styleMix.map((s, i) => {
+                      const colors = ["#D97757", "#1A7A48", "#A86B1A", "#3D4DC2", "#6B5A3A"];
+                      return <div key={s.name} style={{ flexGrow: s.pct, background: colors[i % colors.length], minWidth: s.pct > 0 ? 2 : 0 }} />;
+                    })}
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {stats.styleMix.map((s, i) => {
+                      const colors = ["#D97757", "#1A7A48", "#A86B1A", "#3D4DC2", "#6B5A3A"];
+                      return (
+                        <div key={s.name} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: colors[i % colors.length] }} />
+                          <span className="text-[11px] font-medium text-[#6B6B6B] capitalize flex-1 truncate">{s.name}</span>
+                          <span className="text-[11px] font-black text-[#1A1A1A] tabular-nums">{s.pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-6 text-[10px] text-[#B0ADA4] leading-relaxed">Breakdown of how questions are framed — coding, design, behavioral, or hybrid. Reflects the format mix candidates actually encounter in the loop.</p>
+                </div>
+              )}
+            </div>
+          </div>
 
-            {/* Bottom — real questions feed */}
-            {(() => {
-              const all = stats?.rankedQuestions || [];
-              const roundTypes = Array.from(new Set(all.map(q => q.round_type).filter(Boolean)));
-              const filtered = questionFilter === "all"
-                ? all
-                : all.filter(q => q.round_type === questionFilter);
-              const visible = filtered.slice(0, 5);
-              const totalCount = all.length;
+          {/* Question feed — full width */}
+          <div className={`${CARD_CLASS} grid grid-cols-3 gap-10`}>
+            <div className="col-span-2">
+              <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">From the loop</p>
+              {(() => {
+                const all = stats?.rankedQuestions || [];
+                const roundTypes = Array.from(new Set(all.map(q => q.round_type).filter(Boolean)));
+                const effectiveFilter = questionFilter === "all" ? roundTypes[0] : questionFilter;
+                const filtered = effectiveFilter ? all.filter(q => q.round_type === effectiveFilter) : all;
+                // max 2 per round_type category
+                const catCounts = {};
+                const visible = filtered.filter(q => {
+                  const key = q.round_type || "__none";
+                  catCounts[key] = (catCounts[key] || 0) + 1;
+                  return catCounts[key] <= 2;
+                });
+                const totalCount = all.length;
 
-              const outcomeColor = (o) =>
-                o === "offer" ? "#1A7A48" : o === "rejected" ? "#A82828" : "#9A9A98";
-              const diffColor = (d) =>
-                d === "easy" ? "#1A7A48" : d === "hard" ? "#A82828" : "#A86B1A";
+                const diffChip = (d) => {
+                  if (!d) return null;
+                  const map = { easy: ["#EDFBF3", "#B6EDD0", "#1A7A48"], hard: ["#FBF1ED", "#F0C4C4", "#A82828"], medium: ["#FFF8EB", "#F0D9A0", "#A86B1A"] };
+                  const [bg, border, color] = map[d] || ["#FAF8F4", "#E5E2D8", "#6B6B6B"];
+                  return <span className="px-2 py-0.5 rounded text-[10px] font-bold border capitalize" style={{ background: bg, borderColor: border, color }}>{d}</span>;
+                };
 
-              return (
-                <div>
-                  <div className="flex items-center justify-between gap-6 mb-8 flex-wrap">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em]">
-                        Real questions from the loop
-                      </h3>
-                      {totalCount > 5 && (
-                        <Link
-                          to={`/companies/${companyId}/questions`}
-                          className="text-[11px] font-bold text-[#D97757] hover:underline inline-flex items-center gap-1"
-                        >
+                const outcomeChip = (o) => {
+                  if (!o || o === "unknown") return null;
+                  const map = { offer: ["#EDFBF3", "#B6EDD0", "#1A7A48"], rejected: ["#FBF1ED", "#F0C4C4", "#A82828"], withdrew: ["#FAF8F4", "#E5E2D8", "#6B6B6B"] };
+                  const [bg, border, color] = map[o] || ["#FAF8F4", "#E5E2D8", "#6B6B6B"];
+                  return <span className="px-2 py-0.5 rounded text-[10px] font-bold border capitalize" style={{ background: bg, borderColor: border, color }}>{o}</span>;
+                };
+
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-6">
+                      {roundTypes.length > 1 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {roundTypes.map((rt) => {
+                            const isActive = rt === effectiveFilter;
+                            return (
+                              <FilterChip key={rt} active={isActive} onClick={() => setQuestionFilter(isActive ? "" : rt)}>{rt}</FilterChip>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {totalCount > 0 && (
+                        <Link to={`/companies/${companyId}/questions`} className="text-[11px] font-bold text-[#D97757] hover:underline shrink-0 ml-auto">
                           View all {totalCount} →
                         </Link>
                       )}
                     </div>
-                    {roundTypes.length > 1 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        <FilterChip active={questionFilter === "all"} onClick={() => setQuestionFilter("all")}>
-                          All
-                        </FilterChip>
-                        {roundTypes.map(rt => (
-                          <FilterChip key={rt} active={questionFilter === rt} onClick={() => setQuestionFilter(rt)}>
-                            {rt}
-                          </FilterChip>
+
+                    {visible.length === 0 ? (
+                      <p className="text-[13px] text-[#9A9A98] italic py-8">No questions in this filter.</p>
+                    ) : (
+                      <div>
+                        {visible.map(q => (
+                          <div key={q.id} className="py-5 border-b border-[#EEECE6] last:border-b-0">
+                            <p className="text-[14px] font-semibold text-[#1A1A1A] leading-[1.6] mb-3">{q.text}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {q.round_type && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-[#F4F1EA] border border-[#E5E2D8] text-[#6B6B6B]">{q.round_type}</span>
+                              )}
+                              {diffChip(q.difficulty)}
+                              {outcomeChip(q.report_outcome)}
+                              {(q.topics || []).slice(0, 2).map(t => (
+                                <span key={t} className="px-2 py-0.5 rounded text-[10px] font-medium bg-transparent border border-[#E5E2D8] text-[#9A9A98] lowercase">{t}</span>
+                              ))}
+                              {q.leetcode && (
+                                <a href={q.leetcode} target="_blank" rel="noopener noreferrer"
+                                  className="px-2 py-0.5 rounded text-[10px] font-bold border border-[#F0D6C7] bg-[#FBF1ED] text-[#C25C3D] hover:bg-[#F0D6C7] transition-colors">
+                                  ↗ LC
+                                </a>
+                              )}
+                              {q.interview_date && (
+                                <span className="text-[10px] text-[#B0ADA4] tabular-nums ml-auto">{q.interview_date}</span>
+                              )}
+                            </div>
+                          </div>
                         ))}
+                        {filtered.length > visible.length && (
+                          <p className="pt-4 text-[11px] text-[#9A9A98] italic">
+                            Showing {visible.length} of {filtered.length} questions
+                            {totalCount > filtered.length && ` in this round`}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
+                );
+              })()}
+            </div>
 
-                  {visible.length === 0 ? (
-                    <p className="text-[13px] text-[#9A9A98] italic py-8 text-center">
-                      No questions in this filter — try another round type.
-                    </p>
-                  ) : (
-                    <div className="space-y-8">
-                      {visible.map(q => {
-                        const parts = [];
-                        if (q.interview_date) {
-                          parts.push(
-                            <span key="date" className="text-[#6B6B6B] tabular-nums">{q.interview_date}</span>
-                          );
-                        }
-                        if (q.round_type) {
-                          parts.push(
-                            <span key="round" className="font-bold uppercase tracking-wider text-[#1A1A1A]">{q.round_type}</span>
-                          );
-                        }
-                        if (q.report_outcome && q.report_outcome !== "unknown") {
-                          parts.push(
-                            <span key="outcome" className="font-bold capitalize" style={{ color: outcomeColor(q.report_outcome) }}>
-                              {q.report_outcome}
-                            </span>
-                          );
-                        }
-                        if (q.difficulty) {
-                          parts.push(
-                            <span key="diff" className="font-black uppercase tracking-wider" style={{ color: diffColor(q.difficulty) }}>
-                              {q.difficulty}
-                            </span>
-                          );
-                        }
-                        if (q.style) {
-                          parts.push(
-                            <span key="style" className="font-bold uppercase tracking-wider text-[#6B5A3A]">{q.style}</span>
-                          );
-                        }
-                        (q.topics || []).slice(0, 2).forEach(t => {
-                          parts.push(
-                            <span key={`topic-${t}`} className="text-[#6B6B6B] lowercase">{t}</span>
-                          );
-                        });
-                        if (q.leetcode) {
-                          parts.push(
-                            <a
-                              key="lc"
-                              href={q.leetcode}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-bold text-[#D97757] hover:underline"
-                            >
-                              ↗ LeetCode
-                            </a>
-                          );
-                        }
-
-                        return (
-                          <div key={q.id} className="relative pl-5">
-                            <div className="absolute left-0 top-1 bottom-1 w-[2px] rounded-full" style={{ background: "#D97757" }} />
-                            <p className="text-[13.5px] leading-[1.65] text-[#2A2A2A] font-serif italic mb-4">
-                              {q.text}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px]">
-                              {parts.map((node, i) => (
-                                <span key={`seg-${i}`} className="inline-flex items-center gap-x-3">
-                                  {i > 0 && <span className="text-[#D8D6CE]" aria-hidden="true">·</span>}
-                                  {node}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                </div>
-              );
-            })()}
+            {/* Advice col */}
+            <div className="col-span-1 flex flex-col justify-between">
+              <div>
+                <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">The hard truth</p>
+                <p className="font-heading text-[22px] font-extrabold text-[#1A1A1A] leading-[1.3] tracking-tight mb-5">
+                  Grinding questions alone won't get you through {company.name}'s loop.
+                </p>
+                <p className="text-[13px] text-[#6B6B6B] leading-relaxed mb-8">
+                  Candidates who pass know <em>what</em> to expect, <em>how</em> each round is evaluated, and where most people drop off. A question list tells you what was asked — a plan tells you how to actually get ready.
+                </p>
+                <Link
+                  to={userSessions[0] ? `/session/${userSessions[0].id}` : `/companies/${companyId}/session`}
+                  className="w-full bg-[#D97757] hover:bg-[#E0886A] text-white! py-5 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Open my plan →
+                </Link>
+              </div>
+              <p className="text-[10px] text-[#B0ADA4] mt-8 leading-relaxed">
+                Your plan is calibrated to the rounds, topics, and difficulty profile on this page — not generic prep.
+              </p>
+            </div>
           </div>
         </Section>
 
@@ -1281,10 +1385,9 @@ export function CompanyPage() {
           title="Where the bar sits"
           subheading="What the difficulty mix looks like, how often interviewers throw a lifeline, and where candidates lose momentum."
         >
-          <div className={CARD_CLASS}>
-            <div className="grid grid-cols-3 gap-10">
-              {/* Difficulty mix + Hint culture footer */}
-              <div className="flex flex-col">
+          <div className="grid grid-cols-3 gap-8">
+              {/* Widget 1: Difficulty mix + Hint culture */}
+              <div className={`${CARD_CLASS} col-span-1 flex flex-col`}>
                 <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Difficulty mix</h3>
                 {stats?.difficultyMix?.length > 0 ? (() => {
                   const mix = stats.difficultyMix;
@@ -1357,12 +1460,12 @@ export function CompanyPage() {
                 )}
 
                 {/* Hint culture footer */}
-                <div className="mt-10 pt-2">
-                  <div className="border-t border-[#F4F1EA] pt-5">
+                <div className="mt-10">
+                  <div className="border-t border-[#F4F1EA] pt-12">
                     <h4 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-3">Hint culture</h4>
                     {stats?.hintCulture ? (
                       <>
-                        <p className="text-[13px] text-[#1A1A1A] leading-snug font-medium mb-3">
+                        <p className="text-[13px] text-[#1A1A1A] leading-snug font-medium mb-5">
                           Interviewers gave a hint in{" "}
                           <span className="font-black">{stats.hintCulture.rate}%</span> of
                           struggle moments{" "}
@@ -1377,7 +1480,7 @@ export function CompanyPage() {
                         </div>
                         <div className="flex justify-between text-[9px] font-bold text-[#9A9A98] uppercase tracking-widest mt-2">
                           <span>Sink or swim</span>
-                          <span>Rescuing</span>
+                          <span>Guiding</span>
                         </div>
                       </>
                     ) : (
@@ -1387,8 +1490,10 @@ export function CompanyPage() {
                 </div>
               </div>
 
-              {/* Struggle hotspots — treemap */}
-              <div className="flex flex-col">
+              {/* Widget 2: Struggle hotspots + Elimination by round */}
+              <div className={`${CARD_CLASS} col-span-2`}>
+                <div className="grid grid-cols-2 gap-8">
+                <div>
                 <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Struggle hotspots</h3>
                 {stats?.struggleHotspots?.length > 0 ? (() => {
                   const maxRate = Math.max(...stats.struggleHotspots.map(t => t.rate));
@@ -1454,79 +1559,125 @@ export function CompanyPage() {
                 <p className="mt-4 text-[11px] text-[#9A9A98] font-medium italic leading-relaxed">
                   Bigger cells = topics with the highest visible struggle rates.
                 </p>
-              </div>
+                </div>
 
-              {/* Elimination by round */}
-              <div>
-                <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Elimination by round</h3>
-                {stats?.eliminationByRound?.length > 0 ? (
-                  <div className="space-y-4">
-                    {stats.eliminationByRound.map(r => (
-                      <div key={r.name}>
-                        <div className="flex items-center justify-between mb-1.5 gap-2">
-                          <span className="text-[12.5px] font-bold text-[#1A1A1A] truncate">{r.name}</span>
-                          <span className="text-[11px] font-black tabular-nums shrink-0 text-[#D97757]">
-                            {r.rate}% <span className="font-bold">· n={r.knownCount}</span>
-                          </span>
+                {/* Elimination by round */}
+                <div className="pl-4">
+                  <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Elimination by round</h3>
+                  {stats?.eliminationByRound?.length > 0 ? (
+                    <div className="space-y-4">
+                      {stats.eliminationByRound.map(r => (
+                        <div key={r.name}>
+                          <div className="flex items-center justify-between mb-1.5 gap-2">
+                            <span className="text-[12.5px] font-bold text-[#1A1A1A] truncate">{r.name}</span>
+                            <span className="text-[11px] font-black tabular-nums shrink-0 text-[#D97757]">
+                              {r.rate}% <span className="font-bold">· n={r.knownCount}</span>
+                            </span>
+                          </div>
+                          <Bar value={r.rate} max={100} color="#D97757" />
                         </div>
-                        <Bar value={r.rate} max={100} color="#D97757" />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#9A9A98] italic">Need more known-outcome rounds to map drop-off.</p>
+                  )}
+                  <p className="mt-6 text-[11px] text-[#9A9A98] font-medium italic leading-relaxed">
+                    Drop-off rate where the round outcome is known.
+                  </p>
+                </div>
+                </div>
+              </div>
+          </div>
+        </Section>
+
+        {/* --- WHO GETS IN --- */}
+        <Section
+          title="Who makes it through"
+          subheading="Offer-outcome reports, aggregated — level distribution, prior background, and experience on record."
+        >
+          {!stats?.whoGetsIn ? (
+            <div className={`${CARD_CLASS} flex flex-col items-center justify-center py-16 text-center`}>
+              <p className="text-[13px] font-bold text-[#1A1A1A]">Offer profile forming</p>
+              <p className="text-[11px] text-[#9A9A98] mt-2 max-w-xs leading-relaxed">Not enough offer outcomes on record yet. Check back as more candidates report results.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-12 gap-8">
+              {/* Level mix */}
+              <div className={`${CARD_CLASS} col-span-7`}>
+                <div className="flex items-baseline justify-between mb-8">
+                  <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em]">Level mix</h3>
+                  <span className="text-[10px] font-bold text-[#D97757]">n={stats.whoGetsIn.n} offers</span>
+                </div>
+                {stats.whoGetsIn.levelBars.length > 0 ? (
+                  <div className="space-y-5">
+                    {stats.whoGetsIn.levelBars.map(bar => (
+                      <div key={bar.label} className="flex items-center gap-4">
+                        <span className={`text-[11px] font-black uppercase tracking-wider flex-shrink-0 ${bar.undisclosed ? "text-[#B0ADA4] italic normal-case w-28" : "text-[#1A1A1A] w-14"}`}>
+                          {bar.label}
+                        </span>
+                        <div className="flex-1 h-2 bg-[#FAF6EE] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${bar.pct}%`, background: bar.undisclosed ? "#D8D6CE" : "#D97757" }} />
+                        </div>
+                        <span className={`text-[13px] font-black tabular-nums w-10 text-right ${bar.undisclosed ? "text-[#B0ADA4]" : "text-[#1A1A1A]"}`}>{bar.pct}%</span>
+                        <span className="text-[10px] text-[#9A9A98] w-6 text-right">{bar.count}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-[#9A9A98] italic">Need more known-outcome rounds to map drop-off.</p>
+                  <p className="text-[11px] text-[#9A9A98] italic">No level data on offer reports.</p>
                 )}
-                <p className="mt-6 text-[11px] text-[#9A9A98] font-medium italic leading-relaxed">
-                  Drop-off rate where the round outcome is known.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Section>
 
-        {/* --- SUCCESS COMMONALITIES --- */}
-        <Section 
-          title="What successful interviews had in common" 
-          subheading="Offer outcomes rarely follow a script, but strong reports often share a recognizable shape."
-        >
-          <div className="grid grid-cols-12 gap-8">
-            <div className={`${CARD_CLASS} col-span-8 !p-12`}>
-              <div className="space-y-8">
-                {stats?.successInsights.map((insight, idx) => (
-                  <div key={idx} className="flex items-start gap-6">
-                    <div className="w-6 h-6 rounded-full bg-[#EDFBF3] border border-[#B6EDD0] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
-                      <span className="text-[#1A7A48] text-[12px] font-black">✓</span>
+                {stats.whoGetsIn.yoeBand && (
+                  <div className="mt-10 pt-8 border-t border-[#E5E2D8]">
+                    <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Experience on record</h3>
+                    <div className="flex items-end gap-10">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-widest">Range</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[24px] font-black text-[#1A1A1A] tracking-tight leading-none">{stats.whoGetsIn.yoeBand.min}–{stats.whoGetsIn.yoeBand.max}</span>
+                          <span className="text-[12px] font-bold text-[#9A9A98]">yrs</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-widest">Median</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[24px] font-black text-[#D97757] tracking-tight leading-none">{stats.whoGetsIn.yoeBand.median}</span>
+                          <span className="text-[12px] font-bold text-[#9A9A98]">yrs</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-[#D97757] mb-1">n={stats.whoGetsIn.yoeBand.n}</span>
                     </div>
-                    <p className="text-[16px] font-bold text-[#1A1A1A] leading-relaxed tracking-tight">{insight}</p>
                   </div>
-                ))}
+                )}
               </div>
-            </div>
 
-            <div className={`${CARD_CLASS} col-span-4 bg-[#EDFBF3] border-[#B6EDD0] !p-10`}>
-              <span className="text-[10px] font-black text-[#1A7A48] uppercase tracking-[0.2em] mb-8 block">Offer Snapshot</span>
-              <div className="space-y-10">
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-widest">Common Topic cluster</span>
-                  <span className="text-[15px] font-black text-[#1A1A1A] tracking-tight">
-                    {stats?.topSuccessTopics.length > 0 ? stats.topSuccessTopics.join(' + ') : "Core Technical"}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-widest">Decisive Factor</span>
-                  <span className="text-[15px] font-black text-[#1A1A1A] tracking-tight">
-                    {stats?.decisiveRound} Performance
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-widest">Mastery Threshold</span>
-                  <span className="text-[15px] font-black text-[#1A1A1A] tracking-tight">
-                    {stats?.isEmerging ? "Consistency Focus" : "High Rigor Stability"}
-                  </span>
-                </div>
+              {/* Where they came from */}
+              <div className={`${CARD_CLASS} col-span-5`}>
+                <h3 className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-8">Where they came from</h3>
+                {stats.whoGetsIn.fromCompanies.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {stats.whoGetsIn.fromCompanies.map((co, i) => {
+                      const palette = [
+                        { bg: "#FBF1ED", border: "#F0D6C7", text: "#C25C3D" },
+                        { bg: "#EDFBF3", border: "#B6EDD0", text: "#1A7A48" },
+                        { bg: "#FFF8EB", border: "#F0D9A0", text: "#A86B1A" },
+                        { bg: "#F1EFE3", border: "#D8D2B8", text: "#6B5A3A" },
+                        { bg: "#EEF0FB", border: "#C7CFF0", text: "#3D4DC2" },
+                      ];
+                      const p = palette[i % palette.length];
+                      return (
+                        <span key={co.name} className="px-3 py-1.5 rounded-full text-[11px] font-bold border" style={{ background: p.bg, borderColor: p.border, color: p.text }}>
+                          {co.name}{co.count > 1 && <span className="ml-1.5 opacity-60 font-medium">×{co.count}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-[#9A9A98] italic">No prior company data on record.</p>
+                )}
               </div>
             </div>
-          </div>
+          )}
         </Section>
         {/* --- SOURCES --- */}
         <Section 
@@ -1609,42 +1760,43 @@ export function CompanyPage() {
         </Section>
 
         {/* --- FINAL CONVERSION --- */}
-        <div className="mt-48 mb-60 text-center max-w-3xl mx-auto">
-          <h2 className="font-heading text-5xl font-black tracking-tight text-[#1A1A1A] mb-8 leading-[1.1]">
-            Turn this analysis into a practice plan
-          </h2>
-          <p className="text-xl text-[#6B6B6B] leading-[1.6] mb-12 font-medium tracking-tight">
-            You now know how {company.name} interviews; the next step is a calibrated training session that helps you master exactly those patterns.
-          </p>
-          {(() => {
-            const activeSession = userSessions[0];
-            const isGenerating = activeSession?.plan_status === "generating";
-            return (
-              <div className="flex flex-col items-center gap-6">
-                {isGenerating && (
-                  <div className="flex items-center gap-3 px-6 py-3 rounded-full bg-[#FBF1ED] border border-[#F0D6C7]">
-                    <span style={{
-                      display: "inline-block",
-                      width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                      border: "2px solid #F0D6C7",
-                      borderTopColor: "#D97757",
-                      animation: "spin 0.8s linear infinite",
-                    }} />
-                    <span className="text-[13px] text-[#D97757] font-semibold">
-                      Your {company.name} plan is being built — it'll be ready in a moment
-                    </span>
-                  </div>
-                )}
-                <Link
-                  to={activeSession ? `/session/${activeSession.id}` : "/start"}
-                  className="px-12 py-6 bg-[#D97757] hover:bg-[#E0886A] text-white rounded-2xl text-[17px] font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_10px_20px_rgba(217,119,87,0.15)]"
-                >
-                  {isGenerating ? "View session" : activeSession ? `Continue ${company.name} prep` : `Start ${company.name} prep session`}
-                </Link>
+        {(() => {
+          const activeSession = userSessions[0];
+          const isGenerating = activeSession?.plan_status === "generating";
+          return (
+            <div className="mt-32 mb-48">
+              <div className="bg-white border border-[#E5E2D8] rounded-[32px] px-16 py-14 flex items-center justify-between gap-12 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                <div>
+                  <p className="text-[11px] font-black text-[#D97757] uppercase tracking-[0.2em] mb-3">Your plan is ready</p>
+                  <h2 className="font-heading text-[32px] font-black text-[#1A1A1A] leading-[1.2] tracking-tight mb-3">
+                    You've seen what {company.name} asks.<br />Now prep like you know it.
+                  </h2>
+                  <p className="text-[14px] text-[#6B6B6B] leading-relaxed max-w-md">
+                    A calibrated plan built from this intelligence — rounds, topics, difficulty, the works.
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-4 shrink-0">
+                  {isGenerating && (
+                    <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-[#FBF1ED] border border-[#F0D6C7]">
+                      <span style={{
+                        display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+                        border: "2px solid rgba(217,119,87,0.4)", borderTopColor: "#D97757",
+                        animation: "spin 0.8s linear infinite", flexShrink: 0,
+                      }} />
+                      <span className="text-[12px] text-[#D97757] font-semibold">Building your plan…</span>
+                    </div>
+                  )}
+                  <Link
+                    to={activeSession ? `/session/${activeSession.id}` : "/start"}
+                    className="px-8 py-4 bg-[#D97757] hover:bg-[#E0886A] text-white! rounded-2xl text-[15px] font-black transition-all hover:scale-[1.02] active:scale-[0.98] shadow-[0_8px_24px_rgba(217,119,87,0.3)] whitespace-nowrap"
+                  >
+                    Open my plan →
+                  </Link>
+                </div>
               </div>
-            );
-          })()}
-        </div>
+            </div>
+          );
+        })()}
       </main>
     </div>
   );

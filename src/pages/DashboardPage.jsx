@@ -3,103 +3,44 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AppNav } from "../components/AppNav";
 import { apiFetch } from "../lib/utils";
 
-const STATUS_STYLE = {
-  active:    { background: "#EBF5FF", color: "#1D6FA4", border: "1px solid #BDDCF5" },
-  completed: { background: "#EDFBF3", color: "#1A7A48", border: "1px solid #B6EDD0" },
-  abandoned: { background: "#F5F4F1", color: "#6B6B6B", border: "1px solid #E0DDD3" },
+const CARD_CLASS = "bg-white border border-[#E5E2D8] rounded-[24px] p-8 shadow-[0_2px_8px_rgba(0,0,0,0.02)]";
+
+const STATUS_COLORS = {
+  active:    { bg: "#EDFBF3", border: "#B6EDD0", text: "#1A7A48" },
+  completed: { bg: "#F1EFE3", border: "#D8D2B8", text: "#6B5A3A" },
+  abandoned: { bg: "#F5F4F1", border: "#E0DDD3", text: "#9A9A98" },
 };
 
-function StatusBadge({ status }) {
-  const style = STATUS_STYLE[status] || STATUS_STYLE.abandoned;
+function StatusChip({ status }) {
+  const c = STATUS_COLORS[status] || STATUS_COLORS.abandoned;
   return (
     <span
-      style={{
-        ...style,
-        display: "inline-flex",
-        borderRadius: 999,
-        padding: "3px 10px",
-        fontSize: 11,
-        fontWeight: 500,
-        letterSpacing: "0.02em",
-        textTransform: "capitalize",
-      }}
+      className="px-2 py-0.5 rounded text-[10px] font-bold border capitalize"
+      style={{ background: c.bg, borderColor: c.border, color: c.text }}
     >
       {status}
     </span>
   );
 }
 
-function SessionCard({ session, onDelete, deleting }) {
-  const isActive = session.status === "active";
+function PlanDot({ planStatus }) {
+  if (planStatus === "generating") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[12px] text-[#9A9A98] font-medium">
+        <span style={{
+          display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+          border: "1.5px solid #E0DDD3", borderTopColor: "#D97757",
+          animation: "spin 0.8s linear infinite", flexShrink: 0,
+        }} />
+        Building plan…
+      </span>
+    );
+  }
   return (
-    <article
-      style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E2D8",
-        borderRadius: 14,
-        padding: "20px 22px",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <h2
-          style={{
-            fontSize: 20,
-            fontWeight: 700,
-            letterSpacing: "-0.025em",
-            color: "#1A1A1A",
-            margin: 0,
-            fontFamily: "Martel Sans, sans-serif",
-          }}
-        >
-          {session.company_name}
-        </h2>
-        <StatusBadge status={session.status} />
-      </div>
-      <p style={{ fontSize: 13, color: "#6B6B6B", margin: 0 }}>
-        {session.timeline_weeks ? `${session.timeline_weeks} weeks` : "No timeline set"}
-      </p>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-        <Link
-          to={`/session/${session.id}`}
-          style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "#1A1A1A",
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          {isActive ? "Continue →" : "View →"}
-        </Link>
-        {!isActive && (
-          <button
-            type="button"
-            onClick={() => onDelete(session.id)}
-            disabled={deleting}
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              fontSize: 12,
-              color: "#9A9A98",
-              cursor: deleting ? "not-allowed" : "pointer",
-              fontFamily: "inherit",
-              transition: "color 0.15s",
-            }}
-            onMouseEnter={(e) => { if (!deleting) e.currentTarget.style.color = "#C0392B"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "#9A9A98"; }}
-          >
-            {deleting ? "Deleting…" : "Delete"}
-          </button>
-        )}
-      </div>
-    </article>
+    <span className="inline-flex items-center gap-1.5 text-[12px] text-[#1A7A48] font-medium">
+      <span className="w-2 h-2 rounded-full bg-[#1A7A48] flex-shrink-0" />
+      Plan ready
+    </span>
   );
 }
 
@@ -147,14 +88,13 @@ export function DashboardPage() {
     load();
   }, [navigate, searchParams]);
 
-  const activeSessions = useMemo(
-    () => sessions.filter((s) => s.status === "active"),
-    [sessions],
-  );
-  const pastSessions = useMemo(
-    () => sessions.filter((s) => s.status !== "active"),
-    [sessions],
-  );
+  const activeSessions = useMemo(() => sessions.filter((s) => s.status === "active"), [sessions]);
+  const pastSessions = useMemo(() => sessions.filter((s) => s.status !== "active"), [sessions]);
+
+  const firstName = email ? email.split("@")[0].split(".")[0] : "";
+  const greeting = firstName
+    ? firstName.charAt(0).toUpperCase() + firstName.slice(1)
+    : null;
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -183,136 +123,152 @@ export function DashboardPage() {
     }
   }
 
-  const newSessionAction = (
-    <Link
-      to="/start"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        background: "#1A1A1A",
-        color: "#FFFFFF",
-        borderRadius: 999,
-        padding: "6px 16px",
-        fontSize: 13,
-        fontWeight: 500,
-        textDecoration: "none",
-      }}
-    >
-      + New session
-    </Link>
-  );
-
   return (
-    <div style={{ minHeight: "100vh" }}>
-      <AppNav
-        email={email}
-        onLogout={handleLogout}
-        loggingOut={loggingOut}
-        actions={newSessionAction}
-        credits={10}
-      />
+    <div className="min-h-screen">
+      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} />
 
-      <main
-        style={{
-          maxWidth: 1100,
-          margin: "0 auto",
-          padding: "40px 40px 80px",
-        }}
-      >
+      <main className="max-w-[1240px] mx-auto px-10 pb-32 pt-12">
         {loading ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: "40vh",
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                border: "2px solid #E0DDD3",
-                borderTopColor: "#1A1A1A",
-                animation: "spin 0.8s linear infinite",
-              }}
-            />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <div className="flex items-center justify-center min-h-[40vh]">
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%",
+              border: "2px solid #E0DDD3", borderTopColor: "#1A1A1A",
+              animation: "spin 0.8s linear infinite",
+            }} />
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 48 }}>
-            {error && (
-              <p style={{ fontSize: 13, color: "#C0392B" }}>{error}</p>
-            )}
+          <>
+            {error && <p className="text-[13px] text-[#A82828] mb-8">{error}</p>}
 
+            {/* ── Header ── */}
+            <div className="flex items-end justify-between mb-16">
+              <div>
+                <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-3">Dashboard</p>
+                <h1 className="font-heading text-[48px] font-black tracking-tight text-[#1A1A1A] leading-none">
+                  {greeting ? `Welcome back, ${greeting}` : "Welcome back"}
+                </h1>
+              </div>
+              <Link
+                to="/start"
+                className="bg-[#D97757] hover:bg-[#E0886A] text-white! px-6 py-3 rounded-2xl text-[14px] font-bold flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                + New session
+              </Link>
+            </div>
+
+            {/* ── Active sessions ── */}
             {activeSessions.length > 0 && (
-              <section>
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 500,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.16em",
-                    color: "#9A9A98",
-                    marginBottom: 20,
-                  }}
-                >
-                  Active sessions
+              <section className="mb-16">
+                <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">
+                  Active{activeSessions.length > 1 ? ` · ${activeSessions.length}` : ""}
                 </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                    gap: 14,
-                  }}
-                >
-                  {activeSessions.map((session) => (
-                    <SessionCard
-                      key={session.id}
-                      session={session}
-                      onDelete={deleteSession}
-                      deleting={deletingSessionId === session.id}
-                    />
-                  ))}
-                </div>
+
+                {activeSessions.length === 1 ? (
+                  /* Featured single active session */
+                  <div className="bg-white border border-[#E5E2D8] rounded-[24px] overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex">
+                    {/* Left — tinted content area */}
+                    <div className="flex-1 bg-[#F9F7F3] px-10 py-10 flex flex-col justify-center relative overflow-hidden">
+                      {/* Ghost letter */}
+                      <span
+                        className="absolute right-6 top-1/2 -translate-y-1/2 font-heading font-black leading-none select-none pointer-events-none"
+                        style={{ fontSize: 160, color: "#E8E3D8", letterSpacing: "-0.04em" }}
+                        aria-hidden="true"
+                      >
+                        {activeSessions[0].company_name[0]}
+                      </span>
+                      <p className="text-[10px] font-black text-[#D97757] uppercase tracking-[0.2em] mb-4 relative">Current prep</p>
+                      <h2 className="font-heading text-[44px] font-black tracking-tight text-[#1A1A1A] leading-none mb-5 relative">
+                        {activeSessions[0].company_name}
+                      </h2>
+                      <div className="flex items-center gap-4 relative">
+                        {activeSessions[0].timeline_weeks && (
+                          <span className="text-[12px] text-[#9A9A98] font-medium">
+                            {activeSessions[0].timeline_weeks} weeks
+                          </span>
+                        )}
+                        <PlanDot planStatus={activeSessions[0].plan_status} />
+                      </div>
+                    </div>
+                    {/* Right — actions */}
+                    <div className="w-[260px] flex-shrink-0 border-l border-[#F0EEE6] px-8 py-10 flex flex-col justify-center gap-3">
+                      <Link
+                        to={`/companies/${activeSessions[0].company_id}`}
+                        className="bg-[#D97757] hover:bg-[#E0886A] text-white! py-4 rounded-2xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                      >
+                        Open plan →
+                      </Link>
+                      <Link
+                        to={`/session/${activeSessions[0].id}`}
+                        className="bg-white hover:bg-[#F9F7F3] border border-[#E5E2D8] text-[#6B6B6B] py-3 rounded-2xl text-[13px] font-bold flex items-center justify-center gap-2 transition-colors"
+                      >
+                        Practice session →
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  /* List for multiple active sessions */
+                  <div className={CARD_CLASS}>
+                    {activeSessions.map((s, i) => (
+                      <div
+                        key={s.id}
+                        className={`flex items-center gap-6 py-5 ${i > 0 ? "border-t border-[#F4F1EA]" : ""}`}
+                      >
+                        <h3 className="font-heading text-[20px] font-black tracking-tight text-[#1A1A1A] flex-1">
+                          {s.company_name}
+                        </h3>
+                        {s.timeline_weeks && (
+                          <span className="text-[12px] text-[#9A9A98] font-medium">{s.timeline_weeks} weeks</span>
+                        )}
+                        <PlanDot planStatus={s.plan_status} />
+                        <Link
+                          to={`/companies/${s.company_id}`}
+                          className="text-[12px] font-bold text-[#D97757] hover:underline"
+                        >
+                          Open plan →
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 
+            {/* ── Past sessions ── */}
             {pastSessions.length > 0 && (
               <section>
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 500,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.16em",
-                    color: "#9A9A98",
-                    marginBottom: 20,
-                  }}
-                >
-                  Past sessions
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                    gap: 14,
-                  }}
-                >
-                  {pastSessions.map((session) => (
-                    <SessionCard
-                      key={session.id}
-                      session={session}
-                      onDelete={deleteSession}
-                      deleting={deletingSessionId === session.id}
-                    />
+                <p className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-6">Past sessions</p>
+                <div className={CARD_CLASS}>
+                  {pastSessions.map((s, i) => (
+                    <div
+                      key={s.id}
+                      className={`flex items-center gap-6 py-4 ${i > 0 ? "border-t border-[#F4F1EA]" : ""}`}
+                    >
+                      <span className="text-[15px] font-bold text-[#1A1A1A] flex-1">{s.company_name}</span>
+                      {s.timeline_weeks && (
+                        <span className="text-[12px] text-[#9A9A98] font-medium">{s.timeline_weeks} weeks</span>
+                      )}
+                      <StatusChip status={s.status} />
+                      <Link
+                        to={`/companies/${s.company_id}`}
+                        className="text-[11px] font-bold text-[#D97757] hover:underline"
+                      >
+                        View →
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => deleteSession(s.id)}
+                        disabled={deletingSessionId === s.id}
+                        className="text-[11px] text-[#9A9A98] hover:text-[#A82828] transition-colors disabled:cursor-not-allowed"
+                        style={{ background: "none", border: "none", fontFamily: "inherit", cursor: "pointer" }}
+                      >
+                        {deletingSessionId === s.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </section>
             )}
-          </div>
+          </>
         )}
       </main>
     </div>

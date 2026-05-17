@@ -216,15 +216,12 @@ function squarifyTreemap(items, width = 100, height = 100) {
   return out;
 }
 
-function buildPlanSteps(companyName, reportCount) {
+function buildPlanSteps(companyName, reportCount, roleName) {
   return [
-    `Mapping ${companyName}`,
-    reportCount ? `Reading ${reportCount} candidate ${reportCount === 1 ? "report" : "reports"}` : "Reading candidate reports",
-    "Spotting recurring patterns",
-    "Picking topics that matter",
-    "Calibrating difficulty",
-    "Thinking about you",
-    "Sequencing your plan",
+    reportCount ? `Read ${reportCount} candidate ${reportCount === 1 ? "report" : "reports"}` : "Read candidate reports",
+    "Spotted recurring patterns",
+    `Calibrated for ${roleName || "ROLE NAME"}`,
+    "Sequenced your plan",
   ];
 }
 
@@ -317,7 +314,7 @@ export function CompanyPage() {
       setBuildStep(0);
       return;
     }
-    const steps = buildPlanSteps(company?.name || "this company", reports.length);
+    const steps = buildPlanSteps(company?.name || "this company", reports.length, userSessions[0]?.role_name);
     const id = setInterval(() => {
       setBuildStep(s => Math.min(s + 1, steps.length - 1));
     }, 1800);
@@ -886,7 +883,7 @@ export function CompanyPage() {
               const planStatus = activeSession?.plan_status;
               const isGenerating = !activeSession || planStatus === "generating";
               const hasFailed = planStatus === "failed";
-              const steps = buildPlanSteps(company.name, stats?.reportsAnalyzed || 0);
+              const steps = buildPlanSteps(company.name, stats?.reportsAnalyzed || 0, activeSession?.role_name);
               const visibleSteps = steps.slice(0, buildStep + 1);
               const truncateChip = (s, max = 22) => (s && s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s);
               const topChips = (stats?.topicEmphasis || []).slice(0, 4).map(t => truncateChip(t.name));
@@ -982,35 +979,24 @@ export function CompanyPage() {
                     A personalised sequence drawn from the patterns on this page.
                   </p>
 
-                  {topChips.length > 0 && (() => {
-                    const chipPalette = [
-                      { bg: "#FBF1ED", border: "#F0D6C7", text: "#C25C3D" }, // coral
-                      { bg: "#EDFBF3", border: "#B6EDD0", text: "#1A7A48" }, // sage
-                      { bg: "#FFF8EB", border: "#F0D9A0", text: "#A86B1A" }, // amber
-                      { bg: "#F1EFE3", border: "#D8D2B8", text: "#6B5A3A" }, // warm tan
-                    ];
+                  {(() => {
+                    const focusCount = (stats?.topicEmphasis || []).length;
+                    const checkSteps = [
+                      ...steps,
+                      focusCount > 0 ? `Found ${focusCount} focus ${focusCount === 1 ? "area" : "areas"} to start with` : null,
+                    ].filter(Boolean);
                     return (
-                      <div className="mb-8">
-                        <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] mb-3 block">Focus areas</span>
-                        <div className="flex flex-wrap gap-2">
-                          {topChips.map((name, i) => {
-                            const c = chipPalette[i % chipPalette.length];
-                            return (
-                              <span
-                                key={name}
-                                className="text-[10.5px] font-bold px-2 py-1 rounded-full transition-transform hover:-translate-y-0.5"
-                                style={{
-                                  background: c.bg,
-                                  border: `1px solid ${c.border}`,
-                                  color: c.text,
-                                  boxShadow: `0 1px 2px ${c.border}40`,
-                                }}
-                              >
-                                {name}
-                              </span>
-                            );
-                          })}
-                        </div>
+                      <div className="space-y-2.5 mb-8">
+                        {checkSteps.map((label, i) => (
+                          <div key={i} className="flex items-center gap-3 text-[13px]">
+                            <span className="w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#1A7A48" }}>
+                              <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+                                <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </span>
+                            <span className="text-[#6B6B6B] font-medium">{label}</span>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}

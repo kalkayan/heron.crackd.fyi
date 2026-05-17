@@ -335,15 +335,6 @@ function RoleIcon() {
   );
 }
 
-function StackIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M7 2L12 4.5L7 7L2 4.5L7 2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-      <path d="M2 7L7 9.5L12 7M2 9.5L7 12L12 9.5" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export function OnboardingPage() {
   const navigate = useNavigate();
   const [companies, setCompanies] = useState([]);
@@ -447,7 +438,7 @@ export function OnboardingPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "80px 40px 80px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "120px 40px 80px" }}>
         {/* Welcome pill */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <span
@@ -466,28 +457,30 @@ export function OnboardingPage() {
             }}
           >
             <Sparkle />
-            Welcome — let's build your plan
+            Welcome to crackd.fyi
           </span>
         </div>
 
         {/* Headline */}
         <h1
           style={{
-            fontSize: "clamp(36px, 6vw, 64px)",
-            fontWeight: 700,
+            fontSize: "clamp(32px, 5.5vw, 50px)",
+            fontWeight: 800,
             letterSpacing: "-0.035em",
-            lineHeight: 1.02,
+            lineHeight: 1.13,
             textAlign: "center",
             margin: 0,
             fontFamily: "Martel Sans, sans-serif",
             color: "#1A1A1A",
           }}
         >
-          Welcome to crackd<span style={{ color: "#D97757" }}>.fyi</span>
+          {/* Welcome to crackd<span style={{ color: "#D97757" }}>.fyi</span> */}
+          Tell us where you're headed 
+
         </h1>
         <p
           style={{
-            marginTop: 18,
+            marginTop: 10,
             fontSize: 16,
             color: "#6B6B6B",
             textAlign: "center",
@@ -496,7 +489,7 @@ export function OnboardingPage() {
             lineHeight: 1.55,
           }}
         >
-          Tell us where you're headed and we'll build a prep plan around what they actually test.
+          we'll build a prep plan around what they actually test.
         </p>
 
         {/* Pills row */}
@@ -517,7 +510,6 @@ export function OnboardingPage() {
             />
             <TimelinePill value={timelineWeeks} onChange={setTimelineWeeks} />
             <StaticPill icon={<RoleIcon />} label="Role" value="Senior SWE" />
-            <StaticPill icon={<StackIcon />} label="Stack" value="Backend" />
           </div>
 
           {/* Textarea card */}
@@ -526,7 +518,7 @@ export function OnboardingPage() {
               marginTop: 18,
               background: "#FFFFFF",
               border: "1px solid #E5E2D8",
-              borderRadius: 18,
+              borderRadius: 24,
               padding: "18px 20px 14px",
               boxShadow: "0 1px 2px rgba(0,0,0,0.03), 0 8px 28px rgba(0,0,0,0.04)",
             }}
@@ -618,11 +610,15 @@ export function OnboardingPage() {
                   borderRadius: 999,
                   padding: "8px 16px",
                   fontSize: 13,
-                  fontWeight: 500,
+                  fontWeight: 600,
                   cursor: loading || !selectedCompany ? "not-allowed" : "pointer",
                   fontFamily: "inherit",
-                  transition: "background 0.15s",
+                  transition: "background 0.15s, transform 0.1s",
                 }}
+                onMouseEnter={(e) => { if (!loading && selectedCompany) { e.currentTarget.style.background = "#E0886A"; e.currentTarget.style.transform = "scale(1.02)"; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = loading || !selectedCompany ? "#9A9A98" : "#D97757"; e.currentTarget.style.transform = "scale(1)"; }}
+                onMouseDown={(e) => { if (!loading && selectedCompany) e.currentTarget.style.transform = "scale(0.98)"; }}
+                onMouseUp={(e) => { if (!loading && selectedCompany) e.currentTarget.style.transform = "scale(1.02)"; }}
               >
                 {loading ? "Creating…" : "Create session"}
                 {!loading && <Arrow size={12} color="#FFFFFF" />}

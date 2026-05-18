@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import MonacoEditor, { loader } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 
-// Use locally bundled Monaco instead of jsdelivr CDN (avoids CSP violations in production)
-loader.config({ paths: { vs: "/monacoeditorwork/vs" } });
+// Bypass CDN loader — use locally bundled Monaco (no external scripts, CSP-safe)
+self.MonacoEnvironment = { getWorker: () => new editorWorker() };
+loader.config({ monaco });
 
 const LANGUAGES = [
   { id: "python",     label: "Python",      starter: "def solution():\n    # write your solution here\n    pass\n" },

@@ -248,6 +248,7 @@ export function CompanyPage() {
   const [reports, setReports] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [rounds, setRounds] = useState([]);
+  const [interviewLoop, setInterviewLoop] = useState(null);
   const [error, setError] = useState(null);
   const [userSessions, setUserSessions] = useState([]);
   const [buildStep, setBuildStep] = useState(0);
@@ -258,16 +259,17 @@ export function CompanyPage() {
     if (!companyId) return;
     setLoading(true);
     try {
-      const [cRes, rRes, qRes, rdRes, sRes] = await Promise.all([
+      const [cRes, rRes, qRes, rdRes, sRes, loopRes] = await Promise.all([
         apiFetch(`/api/user/interview/companies/${encodeURIComponent(companyId)}`),
         apiFetch(`/api/user/interview/reports?company_id=${encodeURIComponent(companyId)}&limit=200`),
         apiFetch(`/api/user/interview/companies/${encodeURIComponent(companyId)}/questions`),
         apiFetch(`/api/user/interview/companies/${encodeURIComponent(companyId)}/rounds`),
         apiFetch(`/api/user/sessions`),
+        apiFetch(`/api/user/interview/companies/${encodeURIComponent(companyId)}/interview-loop`),
       ]);
 
-      const [cData, rData, qData, rdData, sData] = await Promise.all([
-        cRes.json(), rRes.json(), qRes.json(), rdRes.json(), sRes.json()
+      const [cData, rData, qData, rdData, sData, loopData] = await Promise.all([
+        cRes.json(), rRes.json(), qRes.json(), rdRes.json(), sRes.json(), loopRes.json()
       ]);
 
       if (cData.error) throw new Error(cData.error);
@@ -275,6 +277,7 @@ export function CompanyPage() {
       setReports(Array.isArray(rData.reports) ? rData.reports : []);
       setQuestions(Array.isArray(qData.questions) ? qData.questions : []);
       setRounds(Array.isArray(rdData.rounds) ? rdData.rounds : []);
+      setInterviewLoop(loopData?.loop || null);
       
       const sessions = Array.isArray(sData.sessions) ? sData.sessions : [];
       const companySessions = sessions.filter(s => s.company_id === companyId);
@@ -387,14 +390,14 @@ export function CompanyPage() {
 
     const isEmerging = reports.length < 5;
 
-    // Process Map
+    // Process Map — aggregate per round type from interview report rounds
     const roundTypeStats = {};
     rounds.forEach(r => {
       const type = r.type || "Other";
       if (!roundTypeStats[type]) {
         roundTypeStats[type] = {
           count: 0, durations: [], failed: 0, totalOutcomes: 0,
-          reportIds: new Set(), quotes: [],
+          reportIds: new Set(), quotes: [], voiceQuotes: [],
         };
       }
       const s = roundTypeStats[type];
@@ -403,6 +406,17 @@ export function CompanyPage() {
       if (r.duration_minutes) s.durations.push(r.duration_minutes);
       if (r.outcome === "failed") s.failed++;
       if (r.outcome && r.outcome !== "unknown") s.totalOutcomes++;
+      // candidate_experience → voice-of-customer quote (preferred)
+      if (r.candidate_experience && r.candidate_experience.trim().length > 20) {
+        s.voiceQuotes.push({
+          summary: r.candidate_experience.trim(),
+          role: r.role || null,
+          date: r.interview_date || null,
+          outcome: r.report_outcome || null,
+          quality: r.report_quality || null,
+        });
+      }
+      // summary → fallback quote
       if (r.summary && r.summary.trim().length > 40) {
         s.quotes.push({
           summary: r.summary.trim(),
@@ -414,52 +428,119 @@ export function CompanyPage() {
       }
     });
 
-    const assumedOrder = ['recruiter', 'phone_screen', 'coding', 'system_design', 'behavioral', 'hiring_manager'];
-    const stages = Object.entries(roundTypeStats)
-      .map(([type, s]) => {
-        const avgDur = s.durations.length
-          ? Math.round(s.durations.reduce((a, b) => a + b, 0) / s.durations.length)
-          : null;
-        // Rank by report quality first, then diversify outcomes:
-        // try to surface one "offer" and one "rejected" voice when available.
-        const qualityRank = { outstanding: 0, high: 1, medium: 2, low: 3 };
-        const byQuality = [...s.quotes].sort(
-          (a, b) => (qualityRank[a.quality] ?? 9) - (qualityRank[b.quality] ?? 9)
-        );
-        const bestOffer = byQuality.find(q => q.outcome === "offer");
-        const bestReject = byQuality.find(q => q.outcome === "rejected");
-        const picked = [];
-        if (bestOffer) picked.push(bestOffer);
-        if (bestReject) picked.push(bestReject);
-        // Fill remaining slots (up to 2) with the next best quotes, skipping already-picked
-        for (const q of byQuality) {
-          if (picked.length >= 2) break;
-          if (!picked.includes(q)) picked.push(q);
-        }
-        const rankedQuotes = picked;
-        return {
-          id: type.toLowerCase().replace(/\s+/g, '_'),
-          name: type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-          duration: avgDur ? `${avgDur}m` : null,
-          avgDurationMin: avgDur,
-          freq: pct(s.count, reports.length),
-          reportCount: s.reportIds.size,
-          freqPct: pct(s.reportIds.size, reports.length),
-          failureRate: s.totalOutcomes > 0 ? pct(s.failed, s.totalOutcomes) : 0,
-          knownOutcomeCount: s.totalOutcomes,
-          failedCount: s.failed,
-          quotes: rankedQuotes.slice(0, 2),
-          tone: type.includes('Behavioral') || type.includes('Manager') ? 'collaborative' : 'evaluative',
-        };
-      })
-      .sort((a, b) => {
-        const idxA = assumedOrder.indexOf(a.id);
-        const idxB = assumedOrder.indexOf(b.id);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return 0;
-      });
+    const qualityRank = { outstanding: 0, high: 1, medium: 2, low: 3 };
+
+    const _pickQuotes = (s) => {
+      // Prefer voice-of-customer quotes; fall back to summaries
+      const pool = s.voiceQuotes.length > 0 ? s.voiceQuotes : s.quotes;
+      const byQuality = [...pool].sort(
+        (a, b) => (qualityRank[a.quality] ?? 9) - (qualityRank[b.quality] ?? 9)
+      );
+      const bestOffer = byQuality.find(q => q.outcome === "offer");
+      const bestReject = byQuality.find(q => q.outcome === "rejected");
+      const picked = [];
+      if (bestOffer) picked.push(bestOffer);
+      if (bestReject) picked.push(bestReject);
+      for (const q of byQuality) {
+        if (picked.length >= 2) break;
+        if (!picked.includes(q)) picked.push(q);
+      }
+      return picked.slice(0, 2);
+    };
+
+    // If InterviewLoop data exists, use it as the primary stage structure
+    const loopRounds = interviewLoop?.rounds || [];
+    let stages;
+
+    if (loopRounds.length > 0) {
+      // Map each loop round to aggregated data from interview report rounds
+      // Match by normalising round name/type: lowercase, collapse whitespace
+      const norm = (s) => (s || "").toLowerCase().replace(/[\s_-]+/g, " ").trim();
+
+      stages = loopRounds
+        .slice()
+        .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
+        .map((lr) => {
+          const loopName = typeof lr === "string" ? lr : (lr.name || "");
+          const loopNorm = norm(loopName);
+
+          // Find all InterviewRound stat buckets whose type/round matches this loop round
+          const matchedStats = Object.entries(roundTypeStats).filter(([type]) =>
+            norm(type) === loopNorm ||
+            norm(type).includes(loopNorm) ||
+            loopNorm.includes(norm(type))
+          );
+
+          // Merge matched buckets
+          const merged = {
+            count: 0, durations: [], failed: 0, totalOutcomes: 0,
+            reportIds: new Set(), quotes: [], voiceQuotes: [],
+          };
+          for (const [, s] of matchedStats) {
+            merged.count += s.count;
+            merged.durations.push(...s.durations);
+            merged.failed += s.failed;
+            merged.totalOutcomes += s.totalOutcomes;
+            s.reportIds.forEach(id => merged.reportIds.add(id));
+            merged.quotes.push(...s.quotes);
+            merged.voiceQuotes.push(...s.voiceQuotes);
+          }
+
+          const avgDur = merged.durations.length
+            ? Math.round(merged.durations.reduce((a, b) => a + b, 0) / merged.durations.length)
+            : (lr.duration_minutes ? lr.duration_minutes : null);
+
+          return {
+            id: loopNorm.replace(/\s+/g, "_"),
+            name: loopName,
+            duration: avgDur ? `${avgDur}m` : null,
+            avgDurationMin: avgDur,
+            summary: typeof lr === "object" ? (lr.summary || null) : null,
+            tips: typeof lr === "object" ? (lr.tips || null) : null,
+            freq: pct(merged.count, reports.length),
+            reportCount: merged.reportIds.size,
+            freqPct: pct(merged.reportIds.size, reports.length),
+            failureRate: merged.totalOutcomes > 0 ? pct(merged.failed, merged.totalOutcomes) : 0,
+            knownOutcomeCount: merged.totalOutcomes,
+            failedCount: merged.failed,
+            quotes: _pickQuotes(merged),
+            tone: loopNorm.includes("behavioral") || loopNorm.includes("manager") ? "collaborative" : "evaluative",
+          };
+        });
+    } else {
+      // Fallback: derive stages from interview report rounds (old behaviour)
+      const assumedOrder = ["recruiter", "phone_screen", "coding", "system_design", "behavioral", "hiring_manager"];
+      stages = Object.entries(roundTypeStats)
+        .map(([type, s]) => {
+          const avgDur = s.durations.length
+            ? Math.round(s.durations.reduce((a, b) => a + b, 0) / s.durations.length)
+            : null;
+          return {
+            id: type.toLowerCase().replace(/\s+/g, "_"),
+            name: type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+            duration: avgDur ? `${avgDur}m` : null,
+            avgDurationMin: avgDur,
+            summary: null,
+            tips: null,
+            freq: pct(s.count, reports.length),
+            reportCount: s.reportIds.size,
+            freqPct: pct(s.reportIds.size, reports.length),
+            failureRate: s.totalOutcomes > 0 ? pct(s.failed, s.totalOutcomes) : 0,
+            knownOutcomeCount: s.totalOutcomes,
+            failedCount: s.failed,
+            quotes: _pickQuotes(s),
+            tone: type.includes("Behavioral") || type.includes("Manager") ? "collaborative" : "evaluative",
+          };
+        })
+        .sort((a, b) => {
+          const idxA = assumedOrder.indexOf(a.id);
+          const idxB = assumedOrder.indexOf(b.id);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return 0;
+        });
+    }
 
     const mainGatekeeper = stages.reduce((prev, current) => (prev.failureRate > current.failureRate) ? prev : current, stages[0]);
 
@@ -779,7 +860,7 @@ export function CompanyPage() {
       topReportsWithLinks,
       whoGetsIn,
     };
-  }, [reports, rounds, company, questions]);
+  }, [reports, rounds, company, questions, interviewLoop]);
 
   function avg(arr) {
     const valid = arr.filter(x => x != null);
@@ -1016,7 +1097,7 @@ export function CompanyPage() {
         {/* --- THE LOOP, AT A GLANCE --- */}
         <Section
           title={`How the ${company.name} loop actually runs`}
-          subheading={`${stats?.reportsAnalyzed} ${stats?.reportsAnalyzed === 1 ? "report" : "reports"} mapped · ${stats?.avgRounds} rounds on average. Click a stage to read what candidates wrote.`}
+          subheading={`${stats?.reportsAnalyzed} ${stats?.reportsAnalyzed === 1 ? "report" : "reports"} mapped · ${stats?.avgRounds} rounds on average${interviewLoop ? " · loop verified" : ""}. Click a stage to read what candidates wrote.`}
         >
           {(() => {
             const stages = stats?.stages || [];
@@ -1074,9 +1155,27 @@ export function CompanyPage() {
                   })}
                 </div>
 
-                {/* Active stage quote panel */}
+                {/* Active stage detail panel */}
                 {active && (
                   <div className="mt-10 pt-10 border-t border-[#F4F1EA]" key={active.id}>
+                    {/* Loop round summary + tips (when derived from InterviewLoop) */}
+                    {(active.summary || active.tips) && (
+                      <div className="mb-8 grid grid-cols-2 gap-6">
+                        {active.summary && (
+                          <div>
+                            <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] block mb-2">What to expect</span>
+                            <p className="text-[13px] text-[#6B6B6B] leading-relaxed">{active.summary}</p>
+                          </div>
+                        )}
+                        {active.tips && (
+                          <div>
+                            <span className="text-[10px] font-black text-[#9A9A98] uppercase tracking-[0.2em] block mb-2">How to prepare</span>
+                            <p className="text-[13px] text-[#6B6B6B] leading-relaxed">{active.tips}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-baseline justify-between mb-6">
                       <div className="flex items-baseline gap-3">
                         <span className="text-[10px] font-black text-[#D97757] uppercase tracking-[0.2em]">Voices from</span>
@@ -1126,7 +1225,7 @@ export function CompanyPage() {
                       </div>
                     ) : (
                       <p className="text-[12px] text-[#9A9A98] font-medium italic">
-                        We haven't captured prose notes for this round yet — try another stage above.
+                        We haven't captured candidate notes for this round yet — try another stage above.
                       </p>
                     )}
                   </div>

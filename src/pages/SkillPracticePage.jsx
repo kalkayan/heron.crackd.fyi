@@ -43,6 +43,7 @@ export function SkillPracticePage() {
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
+  const [aiUsage, setAiUsage] = useState(null);
   const [skillData, setSkillData] = useState(null);   // { session_skill, questions }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -97,6 +98,7 @@ export function SkillPracticePage() {
           skillResp ? skillResp.json() : null,
         ]);
         setEmail(meData?.email || "");
+        setAiUsage(meData?.ai_usage || null);
         setSkillData(skillJson);
         if (skillJson?.questions?.length > 0) {
           setActiveQuestion(skillJson.questions[0]);
@@ -171,7 +173,12 @@ export function SkillPracticePage() {
         }),
       });
       const data = await resp.json();
-      if (!resp.ok) { setError(data.error || "Review failed."); setReviewLoading(false); return; }
+      if (!resp.ok) {
+        setError(resp.status === 429 ? (data.error || "Weekly AI limit reached. Resets on Monday.") : (data.error || "Review failed."));
+        setReviewLoading(false);
+        setReview(null);
+        return;
+      }
 
       const reviewId = data.review_id;
       const questionAtSubmit = activeQuestion;
@@ -221,7 +228,7 @@ export function SkillPracticePage() {
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#F4F1EA", backgroundImage: "radial-gradient(circle, #D8D6CE 1px, transparent 1px)", backgroundSize: "16px 16px" }}>
-      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} credits={10} />
+      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} aiUsage={aiUsage} />
 
       {loading ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>

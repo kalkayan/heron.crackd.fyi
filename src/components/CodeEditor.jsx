@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import MonacoEditor from "@monaco-editor/react";
+import MonacoEditor, { loader } from "@monaco-editor/react";
+
+// Use locally bundled Monaco instead of jsdelivr CDN (avoids CSP violations in production)
+loader.config({ paths: { vs: "/monacoeditorwork/vs" } });
 
 const LANGUAGES = [
   { id: "python",     label: "Python",      starter: "def solution():\n    # write your solution here\n    pass\n" },

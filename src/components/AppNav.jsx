@@ -17,7 +17,7 @@ function Logo() {
   );
 }
 
-export function AppNav({ email, onLogout, loggingOut, actions, leftAction, credits = 10 }) {
+export function AppNav({ email, onLogout, loggingOut, actions, leftAction, aiUsage }) {
   return (
     <header
       style={{
@@ -51,21 +51,35 @@ export function AppNav({ email, onLogout, loggingOut, actions, leftAction, credi
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {credits !== undefined && (
-            <div style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: 6, 
-              fontSize: 11, 
-              fontWeight: 700, 
-              color: "#9A9A98", 
-              textTransform: "uppercase", 
-              letterSpacing: "0.1em",
-              marginRight: 8
+          {aiUsage && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#9A9A98",
+              marginRight: 8,
             }}>
-              AI credits used 
-              <span style={{ color: "#D97757" }}>→</span>
-              <span style={{ color: "#1A1A1A" }}>{credits}</span>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>AI</span>
+              <div style={{
+                width: 48,
+                height: 4,
+                borderRadius: 999,
+                background: "#E5E2D8",
+                overflow: "hidden",
+              }}>
+                <div style={{
+                  height: "100%",
+                  borderRadius: 999,
+                  width: `${Math.min(100, (aiUsage.weekly_used / aiUsage.weekly_limit) * 100)}%`,
+                  background: aiUsage.weekly_used / aiUsage.weekly_limit >= 0.9 ? "#A82828" : "#D97757",
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+              <span style={{ color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
+                {aiUsage.weekly_used.toFixed(1)}<span style={{ color: "#B0ADA4" }}>/{aiUsage.weekly_limit}</span>
+              </span>
             </div>
           )}
           {actions}

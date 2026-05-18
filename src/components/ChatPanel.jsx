@@ -72,7 +72,10 @@ export function ChatPanel({ sessionId, reviewId }) {
         { method: "POST", body: JSON.stringify({ message: msg }) }
       );
       const data = await resp?.json();
-      if (!resp?.ok) { setError(data?.error || "Failed to send."); return; }
+      if (!resp?.ok) {
+        setError(resp?.status === 429 ? "Weekly AI limit reached. Resets on Monday." : (data?.error || "Failed to send."));
+        return;
+      }
 
       // Replace optimistic bubble with real message + add pending AI turn placeholder
       await fetchChat(true);

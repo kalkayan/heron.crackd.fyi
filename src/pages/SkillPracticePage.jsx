@@ -322,8 +322,21 @@ export function SkillPracticePage() {
                           flexShrink: 0,
                         }}
                       >
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.35, marginBottom: 6 }}>
-                          {q.title}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.35, marginBottom: 6, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
+                          <span>{q.title}</span>
+                          {q.external_ref && (
+                            <a
+                              href={q.external_ref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: 10, color: "#9A9A98", textDecoration: "none", flexShrink: 0, marginTop: 1, lineHeight: 1.4 }}
+                              onMouseEnter={e => e.currentTarget.style.color = "#D97757"}
+                              onMouseLeave={e => e.currentTarget.style.color = "#9A9A98"}
+                            >
+                              LC ↗
+                            </a>
+                          )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                           {q.difficulty && <Badge text={q.difficulty} style={DIFFICULTY_STYLE[q.difficulty] || {}} />}

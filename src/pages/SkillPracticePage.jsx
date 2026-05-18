@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppNav } from "../components/AppNav";
+import { CodeEditor } from "../components/CodeEditor";
+import { CodeReviewPanel } from "../components/CodeReviewPanel";
+import { ChatPanel } from "../components/ChatPanel";
 import { apiFetch } from "../lib/utils";
 
 const DIFFICULTY_STYLE = {
@@ -46,6 +49,41 @@ export function SkillPracticePage() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [submitting, setSubmitting] = useState(null);  // session_question_id being submitted
   const [completed, setCompleted] = useState(false);   // skill just got marked completed
+  const [activeQuestion, setActiveQuestion] = useState(null);  // question opened in editor
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [review, setReview] = useState(null);   // current CodeReview result object
+  const [apiCode, setApiCode] = useState(null); // {code, language} from server for active question
+  const reviewPollRef = useRef(null);
+
+  // Cleanup poll on unmount
+  useEffect(() => () => { if (reviewPollRef.current) clearInterval(reviewPollRef.current); }, []);
+
+  // When question changes, fetch last-submitted code + any existing review from server
+  useEffect(() => {
+    const qid = activeQuestion?.session_question_id;
+    if (!qid) return;
+    setApiCode(null);
+    setReview(null);
+    apiFetch(`/api/user/sessions/${sessionId}/questions/${qid}/last-code`)
+      .then(r => r?.json())
+      .then(d => {
+        if (!d?.code) return;
+        setApiCode({ code: d.code, language: d.language });
+        if (d.status === "done" && d.verdict) {
+          setReview({
+            review_id: d.review_id,
+            status: d.status,
+            verdict: d.verdict,
+            overall: d.overall,
+            inline_hints: d.inline_hints || [],
+            approach_feedback: d.approach_feedback,
+            positive_notes: d.positive_notes,
+            reviewed_at: d.reviewed_at,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [activeQuestion?.session_question_id, sessionId]);
 
   useEffect(() => {
     async function load() {
@@ -60,6 +98,9 @@ export function SkillPracticePage() {
         ]);
         setEmail(meData?.email || "");
         setSkillData(skillJson);
+        if (skillJson?.questions?.length > 0) {
+          setActiveQuestion(skillJson.questions[0]);
+        }
       } catch {
         setError("Unable to load this skill.");
       } finally {
@@ -112,213 +153,235 @@ export function SkillPracticePage() {
     }
   }
 
+  async function handleReviewRequest(code, language) {
+    setReviewLoading(true);
+    setReview({ status: "pending" });
+
+    // Clear any existing poll
+    if (reviewPollRef.current) clearInterval(reviewPollRef.current);
+
+    try {
+      const resp = await apiFetch(`/api/user/sessions/${sessionId}/code-review`, {
+        method: "POST",
+        body: JSON.stringify({
+          code,
+          language,
+          problem_title: activeQuestion?.title || "",
+          submission_id: activeQuestion?.session_question_id || "",
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setError(data.error || "Review failed."); setReviewLoading(false); return; }
+
+      const reviewId = data.review_id;
+      const questionAtSubmit = activeQuestion;
+
+      // Poll every 2.5s until done or failed
+      reviewPollRef.current = setInterval(async () => {
+        try {
+          const pr = await apiFetch(`/api/user/sessions/${sessionId}/code-review/${reviewId}`);
+          const pd = await pr.json();
+          if (pd.status === "done" || pd.status === "failed") {
+            clearInterval(reviewPollRef.current);
+            reviewPollRef.current = null;
+            setReviewLoading(false);
+            setReview(pd);
+            if (pd.status === "done" && pd.verdict === "acceptable") {
+              // Backend already marked the submission solved — refresh to pick up updated statuses
+              apiFetch(`/api/user/sessions/${sessionId}/skills/${sessionSkillId}`)
+                .then(r => r?.json())
+                .then(d => { if (d) setSkillData(d); })
+                .catch(() => {});
+            }
+          }
+        } catch {
+          clearInterval(reviewPollRef.current);
+          reviewPollRef.current = null;
+          setReviewLoading(false);
+          setReview({ status: "failed" });
+        }
+      }, 2500);
+    } catch {
+      setError("Could not submit for review.");
+      setReviewLoading(false);
+      setReview(null);
+    }
+  }
+
+  function handleDismissReview() {
+    setReview(prev => prev ? { ...prev, inline_hints: [] } : null);
+    setTimeout(() => setReview(null), 0);
+    if (reviewPollRef.current) { clearInterval(reviewPollRef.current); reviewPollRef.current = null; }
+    setReviewLoading(false);
+  }
+
   const skill = skillData?.session_skill;
   const questions = skillData?.questions || [];
   const solvedCount = questions.filter(q => q.status === "solved").length;
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#F4F1EA", backgroundImage: "radial-gradient(circle, #D8D6CE 1px, transparent 1px)", backgroundSize: "16px 16px" }}>
       <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} credits={10} />
 
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "40px 40px 80px" }}>
-        {loading ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "40vh" }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              border: "2px solid #E0DDD3", borderTopColor: "#1A1A1A",
-              animation: "spin 0.8s linear infinite",
-            }} />
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          </div>
-        ) : error ? (
+      {loading ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%",
+            border: "2px solid #E0DDD3", borderTopColor: "#1A1A1A",
+            animation: "spin 0.8s linear infinite",
+          }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : error ? (
+        <div style={{ flex: 1, padding: "24px 24px" }}>
           <p style={{ fontSize: 13, color: "#C0392B" }}>{error}</p>
-        ) : skill ? (
-          <>
-            {/* Page header */}
-            <div style={{ marginBottom: 36 }}>
-              <Link
-                to={`/session/${sessionId}`}
-                style={{ fontSize: 13, color: "#9A9A98", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
-                onMouseEnter={e => e.currentTarget.style.color = "#1A1A1A"}
-                onMouseLeave={e => e.currentTarget.style.color = "#9A9A98"}
-              >
-                ← Back to session
-              </Link>
-              <div style={{ marginTop: 16, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                <div>
-                  <h1 style={{
-                    fontSize: "clamp(24px, 3.5vw, 38px)",
-                    fontWeight: 700,
-                    letterSpacing: "-0.03em",
-                    color: "#1A1A1A",
-                    fontFamily: "Martel Sans, sans-serif",
-                    lineHeight: 1.05,
-                    margin: 0,
-                  }}>
-                    {skill.skill_name}
-                  </h1>
-                  <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                    {skill.difficulty && (
-                      <Badge text={skill.difficulty} style={DIFFICULTY_STYLE[skill.difficulty] || {}} />
-                    )}
-                    {skill.skill_type && (
-                      <span style={{ fontSize: 12, color: "#9A9A98", textTransform: "capitalize" }}>{skill.skill_type}</span>
-                    )}
-                    {skill.status === "completed" && (
-                      <Badge text="completed" style={{ background: "#EDFBF3", color: "#1A7A48", border: "1px solid #B6EDD0" }} />
-                    )}
-                  </div>
-                </div>
-                <div style={{ fontSize: 13, color: "#6B6B6B", marginTop: 4 }}>
-                  {solvedCount} / {questions.length} solved
-                </div>
-              </div>
-            </div>
+        </div>
+      ) : skill ? (
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", padding: "0 16px" }}>
 
-            {/* Skill completed banner */}
+          {/* Compact page header */}
+          <div style={{ flexShrink: 0, padding: "12px 0 10px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <Link
+              to={`/session/${sessionId}`}
+              style={{ fontSize: 12, color: "#9A9A98", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.color = "#1A1A1A"}
+              onMouseLeave={e => e.currentTarget.style.color = "#9A9A98"}
+            >
+              ← Session
+            </Link>
+            <div style={{ width: 1, height: 14, background: "#D8D6CE", flexShrink: 0 }} />
+            <h1 style={{
+              fontSize: 16,
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              color: "#1A1A1A",
+              fontFamily: "Martel Sans, sans-serif",
+              margin: 0,
+              lineHeight: 1,
+            }}>
+              {skill.skill_name}
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {skill.difficulty && <Badge text={skill.difficulty} style={DIFFICULTY_STYLE[skill.difficulty] || {}} />}
+              {skill.skill_type && <span style={{ fontSize: 11, color: "#9A9A98", textTransform: "capitalize" }}>{skill.skill_type}</span>}
+              {skill.status === "completed" && <Badge text="completed" style={{ background: "#EDFBF3", color: "#1A7A48", border: "1px solid #B6EDD0" }} />}
+            </div>
+            <div style={{ marginLeft: "auto", fontSize: 12, color: "#6B6B6B", flexShrink: 0 }}>
+              {solvedCount} / {questions.length} solved
+            </div>
             {completed && (
               <div style={{
-                marginBottom: 28,
-                background: "#EDFBF3",
-                border: "1px solid #B6EDD0",
-                borderRadius: 14,
-                padding: "16px 20px",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
+                display: "flex", alignItems: "center", gap: 6,
+                background: "#EDFBF3", border: "1px solid #B6EDD0", borderRadius: 999,
+                padding: "4px 12px", fontSize: 12, color: "#1A7A48", fontWeight: 600,
               }}>
-                <span style={{ fontSize: 20 }}>🎉</span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1A7A48" }}>Skill mastered!</div>
-                  <div style={{ fontSize: 13, color: "#2E9E62", marginTop: 2 }}>
-                    {skill.skill_name} has been added to your capabilities.
-                  </div>
-                </div>
+                🎉 Skill mastered!
               </div>
             )}
+          </div>
 
-            {/* Two-column layout */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, alignItems: "start" }}>
+          {/* Three-column layout filling remaining height */}
+          <div style={{
+            flex: 1,
+            minHeight: 0,
+            display: "grid",
+            gridTemplateColumns: review ? "320px 1fr 380px" : "320px 1fr",
+            gap: 10,
+            paddingBottom: 12,
+          }}>
 
-              {/* Left: question list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <h2 style={{ fontSize: 13, fontWeight: 600, color: "#6B6B6B", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>
-                  Questions
-                </h2>
-
+            {/* Col 1: question list */}
+            <div style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#9A9A98", textTransform: "uppercase", letterSpacing: "0.1em", padding: "0 2px 8px", flexShrink: 0 }}>
+                Questions · {solvedCount}/{questions.length}
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                 {questions.length === 0 ? (
-                  <div style={{
-                    background: "#FFFFFF",
-                    border: "1px solid #E5E2D8",
-                    borderRadius: 14,
-                    padding: "24px 20px",
-                  }}>
-                    <p style={{ fontSize: 13, color: "#6B6B6B", margin: 0 }}>
-                      No questions available for this skill yet.
-                    </p>
-                  </div>
+                  <p style={{ fontSize: 13, color: "#9A9A98", fontStyle: "italic" }}>No questions yet.</p>
                 ) : (
-                  questions.map(q => (
-                    <div
-                      key={q.session_question_id}
-                      style={{
-                        background: q.status === "solved" ? "#FAFDF8" : "#FFFFFF",
-                        border: `1px solid ${q.status === "solved" ? "#B6EDD0" : "#E5E2D8"}`,
-                        borderRadius: 14,
-                        padding: "16px 18px",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                        gap: 14,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1A1A1A", letterSpacing: "-0.01em", lineHeight: 1.3 }}>
+                  questions.map(q => {
+                    const isActive = activeQuestion?.session_question_id === q.session_question_id;
+                    return (
+                      <div
+                        key={q.session_question_id}
+                        onClick={() => setActiveQuestion(q)}
+                        style={{
+                          background: isActive ? "#FDF6F2" : q.status === "solved" ? "#FAFDF8" : "#FFFFFF",
+                          border: `1px solid ${isActive ? "#D97757" : q.status === "solved" ? "#B6EDD0" : "#E5E2D8"}`,
+                          borderLeft: isActive ? "3px solid #D97757" : `1px solid ${q.status === "solved" ? "#B6EDD0" : "#E5E2D8"}`,
+                          borderRadius: 10,
+                          padding: "10px 11px",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.35, marginBottom: 6 }}>
                           {q.title}
                         </div>
-                        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                          {q.difficulty && (
-                            <Badge text={q.difficulty} style={DIFFICULTY_STYLE[q.difficulty] || {}} />
-                          )}
-                          {q.last_outcome && (
-                            <Badge text={q.last_outcome} style={OUTCOME_STYLE[q.last_outcome] || {}} />
-                          )}
-                          {q.external_ref && (
-                            <a
-                              href={q.external_ref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontSize: 11, color: "#9A9A98", textDecoration: "none" }}
-                              onMouseEnter={e => e.currentTarget.style.color = "#1A1A1A"}
-                              onMouseLeave={e => e.currentTarget.style.color = "#9A9A98"}
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                          {q.difficulty && <Badge text={q.difficulty} style={DIFFICULTY_STYLE[q.difficulty] || {}} />}
+                          {q.last_outcome && <Badge text={q.last_outcome} style={OUTCOME_STYLE[q.last_outcome] || {}} />}
+                          {q.status !== "solved" ? (
+                            <button
+                              type="button"
+                              disabled={submitting === q.session_question_id}
+                              onClick={e => { e.stopPropagation(); handleSubmit(q.session_question_id, "solved"); }}
+                              style={{
+                                marginLeft: "auto",
+                                background: "transparent",
+                                color: "#9A9A98",
+                                border: "1px solid #E5E2D8",
+                                borderRadius: 999,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                opacity: submitting === q.session_question_id ? 0.5 : 1,
+                                whiteSpace: "nowrap",
+                              }}
                             >
-                              ↗ LeetCode
-                            </a>
+                              {submitting === q.session_question_id ? "…" : "Solved ✓"}
+                            </button>
+                          ) : (
+                            <span style={{ marginLeft: "auto", fontSize: 13, color: "#1A7A48" }}>✓</span>
                           )}
                         </div>
                       </div>
-
-                      {/* Submit button */}
-                      {q.status !== "solved" ? (
-                        <button
-                          type="button"
-                          disabled={submitting === q.session_question_id}
-                          onClick={() => handleSubmit(q.session_question_id, "solved")}
-                          style={{
-                            background: "#1A1A1A",
-                            color: "#FFFFFF",
-                            border: "none",
-                            borderRadius: 999,
-                            padding: "8px 16px",
-                            fontSize: 12,
-                            fontWeight: 500,
-                            cursor: submitting === q.session_question_id ? "not-allowed" : "pointer",
-                            fontFamily: "inherit",
-                            opacity: submitting === q.session_question_id ? 0.5 : 1,
-                            whiteSpace: "nowrap",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {submitting === q.session_question_id ? "Saving…" : "Mark solved"}
-                        </button>
-                      ) : (
-                        <span style={{ fontSize: 18, flexShrink: 0 }}>✓</span>
-                      )}
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
-
-              {/* Right: practice area (placeholder) */}
-              <div style={{
-                position: "sticky",
-                top: 72,
-                background: "#F6F4ED",
-                border: "1px solid #E5E2D8",
-                borderRadius: 18,
-                padding: "32px 28px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                minHeight: 360,
-                gap: 12,
-                textAlign: "center",
-              }}>
-                <div style={{ fontSize: 32 }}>⌨️</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A1A1A", letterSpacing: "-0.01em" }}>
-                  Practice area
-                </div>
-                <div style={{ fontSize: 13, color: "#9A9A98", lineHeight: 1.5, maxWidth: 240 }}>
-                  Code editor and AI feedback will appear here. Coming soon.
-                </div>
-              </div>
-
             </div>
-          </>
-        ) : null}
-      </main>
+
+            {/* Col 2: code editor fills height */}
+            <div style={{ overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <CodeEditor
+                questionId={activeQuestion?.session_question_id}
+                apiCode={apiCode}
+                onReviewRequest={handleReviewRequest}
+                reviewLoading={reviewLoading}
+                inlineHints={review?.status === "done" ? (review.inline_hints || []) : []}
+              />
+            </div>
+
+            {/* Col 3: feedback + chat (only when review exists) */}
+            {review && (
+              <div style={{ overflow: "hidden", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+                <div style={{ overflowY: "auto", flexShrink: 0, maxHeight: review.status === "done" ? "58%" : "100%" }}>
+                  <CodeReviewPanel review={review} onDismiss={handleDismissReview} />
+                </div>
+                {review.status === "done" && (
+                  <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+                    <ChatPanel sessionId={sessionId} reviewId={review.review_id} />
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

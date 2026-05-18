@@ -895,7 +895,7 @@ export function CompanyPage() {
 
   return (
     <div className="min-h-screen bg-[#F4F1EA] bg-[radial-gradient(circle,_#D8D6CE_1px,_transparent_1px)] bg-[size:16px_16px] selection:bg-[#D97757]/20">
-      <AppNav leftAction={backLink} credits={10} />
+      <AppNav leftAction={backLink} />
       
       <main className="max-w-[1240px] mx-auto px-10 pt-16 pb-40">
         {/* --- HERO ROW --- */}

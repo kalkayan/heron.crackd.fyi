@@ -48,6 +48,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
+  const [aiUsage, setAiUsage] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [deletingSessionId, setDeletingSessionId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -66,6 +67,7 @@ export function DashboardPage() {
           sessionsResp ? sessionsResp.json() : null,
         ]);
         setEmail(meData?.email || "");
+        setAiUsage(meData?.ai_usage || null);
         const loadedSessions = sessionsData?.sessions || [];
         setSessions(loadedSessions);
 
@@ -125,7 +127,7 @@ export function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} />
+      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} aiUsage={aiUsage} />
 
       <main className="max-w-[1240px] mx-auto px-10 pb-32 pt-12">
         {loading ? (

@@ -585,6 +585,7 @@ export function SessionPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [aiUsage, setAiUsage] = useState(null);
   const [session, setSession] = useState(null);
   const [plan, setPlan] = useState([]);
   const [planStatus, setPlanStatus] = useState("ready");
@@ -612,6 +613,7 @@ export function SessionPage() {
           capsResp ? capsResp.json() : null,
         ]);
         setEmail(meData?.email || "");
+        setAiUsage(meData?.ai_usage || null);
         setSession(sessionData);
         setPlan(planData?.plan || []);
         setPlanStatus(planData?.plan_status || "ready");
@@ -716,7 +718,7 @@ export function SessionPage() {
 
   return (
     <div style={{ minHeight: "100vh" }}>
-      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} leftAction={backLink} />
+      <AppNav email={email} onLogout={handleLogout} loggingOut={loggingOut} leftAction={backLink} aiUsage={aiUsage} />
 
       <main style={{ maxWidth: 1240, margin: "0 auto", padding: "40px 40px 80px" }}>
         {loading ? (

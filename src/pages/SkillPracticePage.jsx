@@ -338,11 +338,11 @@ export function SkillPracticePage() {
                             </a>
                           )}
                         </div>
-                        {q.text && (
+                        {(q.text || q.title) && (
                           isActive ? (
                             <div style={{ fontSize: 11, color: "#6B6B6B", lineHeight: 1.6, marginBottom: 6 }}
                               className="question-md">
-                              <Markdown>{q.text}</Markdown>
+                              <Markdown>{q.text || q.title}</Markdown>
                             </div>
                           ) : (
                             <div style={{
@@ -352,7 +352,7 @@ export function SkillPracticePage() {
                               WebkitBoxOrient: "vertical",
                               overflow: "hidden",
                             }}>
-                              {q.text}
+                              {q.text || q.title}
                             </div>
                           )
                         )}

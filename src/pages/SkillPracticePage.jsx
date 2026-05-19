@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import Markdown from "react-markdown";
 import { AppNav } from "../components/AppNav";
 import { CodeEditor } from "../components/CodeEditor";
 import { CodeReviewPanel } from "../components/CodeReviewPanel";
@@ -338,17 +339,22 @@ export function SkillPracticePage() {
                           )}
                         </div>
                         {q.text && (
-                          <div style={{
-                            fontSize: 11, color: "#6B6B6B", lineHeight: 1.55, marginBottom: 6,
-                            ...(!isActive && {
+                          isActive ? (
+                            <div style={{ fontSize: 11, color: "#6B6B6B", lineHeight: 1.6, marginBottom: 6 }}
+                              className="question-md">
+                              <Markdown>{q.text}</Markdown>
+                            </div>
+                          ) : (
+                            <div style={{
+                              fontSize: 11, color: "#6B6B6B", lineHeight: 1.55, marginBottom: 6,
                               display: "-webkit-box",
                               WebkitLineClamp: 2,
                               WebkitBoxOrient: "vertical",
                               overflow: "hidden",
-                            }),
-                          }}>
-                            {q.text}
-                          </div>
+                            }}>
+                              {q.text}
+                            </div>
+                          )
                         )}
                         <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                           {q.difficulty && <Badge text={q.difficulty} style={DIFFICULTY_STYLE[q.difficulty] || {}} />}

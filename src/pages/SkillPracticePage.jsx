@@ -319,7 +319,6 @@ export function SkillPracticePage() {
                           borderRadius: 10,
                           padding: "10px 11px",
                           cursor: "pointer",
-                          flexShrink: 0,
                         }}
                       >
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#1A1A1A", lineHeight: 1.35, marginBottom: 6, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
@@ -338,6 +337,19 @@ export function SkillPracticePage() {
                             </a>
                           )}
                         </div>
+                        {q.text && (
+                          <div style={{
+                            fontSize: 11, color: "#6B6B6B", lineHeight: 1.55, marginBottom: 6,
+                            ...(!isActive && {
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }),
+                          }}>
+                            {q.text}
+                          </div>
+                        )}
                         <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                           {q.difficulty && <Badge text={q.difficulty} style={DIFFICULTY_STYLE[q.difficulty] || {}} />}
                           {q.last_outcome && <Badge text={q.last_outcome} style={OUTCOME_STYLE[q.last_outcome] || {}} />}
